@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.egg-info/
+.env
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Postgres data
+pgdata/
+
+# Docker
+*.log
+*.pid
+*.seed
+*.bak
+
+# VS Code
+.vscode/
