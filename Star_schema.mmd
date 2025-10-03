@@ -1,0 +1,72 @@
+erDiagram
+    %%====================
+    %% DIMENSIONS
+    %%====================
+
+    DIM_DEVICE {
+        int DeviceKey PK
+        string Brand
+        string Model
+        float MinPower
+        float MaxPower
+        date InstallationDate
+        date ValidTo
+    }
+
+    DIM_LOCATION {
+        int LocationKey PK
+        string DeviceLocation
+        string ClosestWeatherStation
+        string PricingRegion
+        date ValidFrom
+        date ValidTo
+    }
+
+    DIM_TIME {
+        int TimeKey PK
+        date FullDate
+        int Year
+        int Month
+        int Day
+        int DayOfWeek
+        int HourOfDay
+        string Season
+        boolean IsHoliday
+        boolean IsWeekend
+        boolean IsPeakHour
+    }
+
+    %%====================
+    %% FACT TABLE
+    %%====================
+    
+    FACT_HEATING_ENERGY_USAGE {
+        int FactID PK
+        int TimeKey FK
+        int DeviceKey FK
+        int LocationKey FK
+        float ASHP_Power
+        float ElectricityPrice
+        float IndoorTemp
+        float IndoorHumidityPerc
+        float IndoorHumidityAbs
+        float IndoorAir_pm25
+        float IndoorAir_pm10
+        float OutdoorTemp
+        float OutdoorHumidityPerc
+        float AirPressure
+        float WindSpeed
+        float WindDir
+        float Precipitation
+        float UV_index
+        float Illumination
+        float Irradiation
+    }
+
+    %%====================
+    %% RELATIONSHIPS
+    %%====================
+    
+    FACT_HEATING_ENERGY_USAGE ||--|| DIM_TIME : "TimeKey"
+    FACT_HEATING_ENERGY_USAGE }|--|| DIM_DEVICE : "DeviceKey"
+    FACT_HEATING_ENERGY_USAGE }|--|| DIM_LOCATION : "LocationKey"
