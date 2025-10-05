@@ -5,68 +5,68 @@ erDiagram
 
     DIM_DEVICE {
         int DeviceKey PK
-        string Brand
-        string Model
-        float MinPower
-        float MaxPower
-        date InstallationDate
-        date ValidTo
+        string Brand "NOT NULL"
+        string Model "NOT NULL"
+        float MinPower "CHECK (>=0)"
+        float MaxPower "CHECK (>=MinPower)"
+        date InstallationDate "NOT NULL"
+        date ValidTo "DEFAULT '9999-12-31'"
     }
 
     DIM_LOCATION {
         int LocationKey PK
-        string DeviceLocation
-        string ClosestWeatherStation
-        string PricingRegion
-        date ValidFrom
-        date ValidTo
+        string DeviceLocation "NOT NULL"
+        string ClosestWeatherStation "NOT NULL"
+        string PricingRegion "NOT NULL"
+        date ValidFrom "NOT NULL"
+        date ValidTo "DEFAULT '9999-12-31'"
     }
 
     DIM_TIME {
         int TimeKey PK
-        date FullDate
-        int Year
-        int Month
-        int Day
-        int DayOfWeek
-        int HourOfDay
-        string Season
-        boolean IsHoliday
-        boolean IsWeekend
-        boolean IsPeakHour
+        date FullDate "NOT NULL"
+        int Year "CHECK (>=2000)"
+        int Month "CHECK (1-12)"
+        int Day "CHECK (1-31)"
+        int DayOfWeek "CHECK (1-7)"
+        int HourOfDay "CHECK (0-23)"
+        string Season "CHECK IN {Winter,Spring,Summer,Autumn}"
+        boolean IsHoliday "DEFAULT false"
+        boolean IsWeekend "DEFAULT false"
+        boolean IsPeakHour "DEFAULT false"
     }
 
     %%====================
     %% FACT TABLE
     %%====================
-    
+
     FACT_HEATING_ENERGY_USAGE {
         int FactID PK
-        int TimeKey FK
-        int DeviceKey FK
-        int LocationKey FK
-        float ASHP_Power
+        int TimeKey FK "NOT NULL"
+        int DeviceKey FK "NOT NULL"
+        int LocationKey FK "NOT NULL"
+        float ASHP_Power "CHECK (>=0)"
         float ElectricityPrice
         float IndoorTemp
-        float IndoorHumidityPerc
+        float IndoorHumidityPerc "CHECK (0<=value<=100)"
         float IndoorHumidityAbs
-        float IndoorAir_pm25
-        float IndoorAir_pm10
+        float IndoorAir_pm25 "CHECK (>=0)"
+        float IndoorAir_pm10 "CHECK (>=0)"
         float OutdoorTemp
-        float OutdoorHumidityPerc
-        float AirPressure
-        float WindSpeed
-        float WindDir
-        float Precipitation
-        float UV_index
-        float Illumination
-        float Irradiation
+        float OutdoorHumidityPerc "CHECK (0<=value<=100)"
+        float AirPressure "CHECK (>=800 AND <=1100)"
+        float WindSpeed "CHECK (>=0)"
+        float WindDir "CHECK (0<=value<360)"
+        float Precipitation "CHECK (>=0)"
+        float UV_index "CHECK (>=0)"
+        float Illumination "CHECK (>=0)"
+        float Irradiation "CHECK (>=0)"
     }
 
     %%====================
     %% RELATIONSHIPS
     %%====================
-    
+
     FACT_HEATING_ENERGY_USAGE ||--|| DIM_TIME : "TimeKey"
     FACT_HEATING_ENERGY_USAGE }|--|| DIM_DEVICE : "DeviceKey"
     FACT_HEATING_ENERGY_USAGE }|--|| DIM_LOCATION : "LocationKey"
