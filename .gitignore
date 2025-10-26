@@ -24,6 +24,9 @@ pgdata/
 # VS Code
 .vscode/
 
+# GitHub config (actions, templates)
+/.github/
+
 # Project-specific ignores
 /01_Business_Brief_and_Star_Shema/P1_feedbck.pdf
 /01_Business_Brief_and_Star_Shema/project1_description.pdf
@@ -32,3 +35,6 @@ pgdata/
 /02_Airflow_ClickHouse_dbt/dbt/.user.yml
 /02_Airflow_ClickHouse_dbt/project2_instructions.pdf
 /dynamic_TODOs.txt
+
+# Ignore exploration notebook (large/volatile)
+/01_Business_Brief_and_Star_Shema/iot_data_exploration.ipynb

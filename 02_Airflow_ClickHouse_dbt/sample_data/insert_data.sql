@@ -1,82 +1,56 @@
 /*
--- This is the single setup script.
--- It will be executed in batch mode.
--- We add 'IF NOT EXISTS' to make it safe to re-run.
+============================================================
+ Raw data ingestion for project CSVs (ClickHouse SQL)
+ - Creates database raw_data
+ - Creates one raw table per CSV
+ - Loads data from CSVs using table function file(..., 'CSVWithNames')
+
+ Notes:
+ - Paths below use absolute Windows paths for clarity. Adjust to your ClickHouse server's accessible path (e.g., user_files).
+ - For meteo and price CSVs, we infer all columns as String via CREATE TABLE AS SELECT; refine types later in dbt models.
+============================================================
 */
 
-CREATE DATABASE IF NOT EXISTS supermarket;
+-- Create raw database (idempotent)
+CREATE DATABASE IF NOT EXISTS raw_data;
 
--- Dimension Tables
-CREATE TABLE IF NOT EXISTS supermarket.DimDate (
-    DateKey         UInt32,
-    FullDate        Date,
-    Year            UInt16,
-    Month           UInt8,
-    Day             UInt8,
-    DayOfWeek       String
-) ENGINE = MergeTree()
-ORDER BY (DateKey);
+-- 1) IOT sensor data (columns known: entity_id, state, last_changed)
+DROP TABLE IF EXISTS raw_data.iot_andmed;
+CREATE TABLE raw_data.iot_andmed
+(
+    entity_id    String,
+    state        String,
+    last_changed DateTime
+)
+ENGINE = MergeTree
+ORDER BY (last_changed, entity_id);
 
-CREATE TABLE IF NOT EXISTS supermarket.DimStore (
-    StoreKey        UInt32,
-    StoreName       String,
-    City            String,
-    Region          String
-) ENGINE = MergeTree()
-ORDER BY (StoreKey);
+-- Insert rows from CSV (header row present)
+INSERT INTO raw_data.iot_andmed (entity_id, state, last_changed)
+SELECT
+    entity_id,
+    state,
+    parseDateTimeBestEffort(last_changed) AS last_changed
+FROM file('c:/Users/loppl/Documents_C/MAKA/DE_aka_Andmetehnika/DE_project_2025/IOT_andmed_7.12.24-17.03.25.csv',
+          'CSVWithNames',
+          'entity_id String, state String, last_changed String');
 
-CREATE TABLE IF NOT EXISTS supermarket.DimProduct (
-    ProductKey      UInt32,
-    ProductName     String,
-    Category        String,
-    Brand           String
-) ENGINE = MergeTree()
-ORDER BY (ProductKey);
+-- 2) Meteorological data (schema inferred as String columns)
+DROP TABLE IF EXISTS raw_data.meteo_physicum;
+CREATE TABLE raw_data.meteo_physicum
+ENGINE = MergeTree
+ORDER BY tuple()
+AS
+SELECT *
+FROM file('c:/Users/loppl/Documents_C/MAKA/DE_aka_Andmetehnika/DE_project_2025/Meteo Physicum archive 071224-170325 - archive.csv',
+          'CSVWithNames');
 
-CREATE TABLE IF NOT EXISTS supermarket.DimSupplier (
-    SupplierKey     UInt32,
-    SupplierName    String,
-    ContactInfo     String
-) ENGINE = MergeTree()
-ORDER BY (SupplierKey);
-
-CREATE TABLE IF NOT EXISTS supermarket.DimCustomer (
-    CustomerSurrKey UInt32,
-    CustomerID      UInt32,
-    FullName        String,
-    City            String,
-    ValidFrom       Date,
-    ValidTo         Date
-) ENGINE = MergeTree()
-ORDER BY (CustomerSurrKey);
-
--- Fact Table
-CREATE TABLE IF NOT EXISTS supermarket.FactSales (
-    SalesKey        UInt64,
-    DateKey         UInt32,
-    CustomerSurrKey UInt32,
-    ProductKey      UInt32,
-    StoreKey        UInt32,
-    SupplierKey     UInt32,
-    QuantitySold    UInt16,
-    SalesAmount     Decimal(10, 2),
-    FullDate        Date
-) ENGINE = MergeTree()
-PARTITION BY toYYYYMM(FullDate)
-ORDER BY (FullDate, StoreKey, ProductKey);
-
--- Clear out any partial data from previous failed runs.
-TRUNCATE TABLE supermarket.DimDate;
-TRUNCATE TABLE supermarket.DimStore;
-TRUNCATE TABLE supermarket.DimProduct;
-TRUNCATE TABLE supermarket.DimSupplier;
-TRUNCATE TABLE supermarket.DimCustomer;
-TRUNCATE TABLE supermarket.FactSales;
-
--- Now, insert all data in one go.
-INSERT INTO supermarket.DimDate FORMAT CSVWithNames FROM file('dim_date.csv');
-INSERT INTO supermarket.DimStore FORMAT CSVWithNames FROM file('dim_store.csv');
-INSERT INTO supermarket.DimProduct FORMAT CSVWithNames FROM file('dim_product.csv');
-INSERT INTO supermarket.DimSupplier FORMAT CSVWithNames FROM file('dim_supplier.csv');
-INSERT INTO supermarket.DimCustomer FORMAT CSVWithNames FROM file('dim_customer.csv');
-INSERT INTO supermarket.FactSales FORMAT CSVWithNames FROM file('fact_sales.csv');
+-- 3) Electricity pricing data (schema inferred as String columns)
+DROP TABLE IF EXISTS raw_data.np_tunnihinnad;
+CREATE TABLE raw_data.np_tunnihinnad
+ENGINE = MergeTree
+ORDER BY tuple()
+AS
+SELECT *
+FROM file('c:/Users/loppl/Documents_C/MAKA/DE_aka_Andmetehnika/DE_project_2025/NP tunnihinnad    071224-170325.csv',
+          'CSVWithNames');
