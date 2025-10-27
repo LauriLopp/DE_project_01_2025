@@ -1,30 +1,147 @@
 version: 2
 
 models:
-  - name: fact_sales
-    description: "Fact table of all sales transactions"
+  - name: dim_device
+    description: "Dimension table for devices."
     columns:
-      - name: SaleID
-        description: "Unique identifier for each sale"
+      - name: DeviceKey
+        description: "Primary key for the device."
+        tests:
+          - unique
+          - not_null
+      - name: Brand
+        description: "Brand of the device."
         tests:
           - not_null
-      - name: CustomerKey
-        description: "Reference to the customer dimension"
+      - name: Model
+        description: "Model of the device."
         tests:
           - not_null
-      - name: ProductKey
-        description: "Reference to the product dimension"
+      - name: MinPower
+        description: "Minimum power of the device."
+      - name: InstallationDate
+        description: "Installation date of the device."
         tests:
           - not_null
-      - name: StoreKey
-        description: "Reference to the store dimension"
+      - name: ValidTo
+        description: "Validity end date for the device."
+
+  - name: dim_location
+    description: "Dimension table for locations."
+    columns:
+      - name: LocationKey
+        description: "Primary key for the location."
+        tests:
+          - unique
+          - not_null
+      - name: DeviceLocation
+        description: "Location of the device."
         tests:
           - not_null
-      - name: SalesAmount
-        description: "Total amount of the sale"
+      - name: ClosestWeatherStation
+        description: "Closest weather station to the location."
         tests:
+          - not_null
+      - name: PricingRegion
+        description: "Pricing region for the location."
+        tests:
+          - not_null
+      - name: ValidFrom
+        description: "Start date of validity for the location."
+        tests:
+          - not_null
+      - name: ValidTo
+        description: "End date of validity for the location."
+
+  - name: dim_time
+    description: "Dimension table for time."
+    columns:
+      - name: TimeKey
+        description: "Primary key for the time dimension."
+        tests:
+          - unique
           - not_null
       - name: FullDate
-        description: "Date of the sale"
+        description: "Full date."
         tests:
           - not_null
+      - name: Year
+        description: "Year of the date."
+      - name: Month
+        description: "Month of the date."
+      - name: Day
+        description: "Day of the date."
+      - name: DayOfWeek
+        description: "Day of the week (1=Monday, 7=Sunday)."
+      - name: HourOfDay
+        description: "Hour of the day (0-23)."
+      - name: Season
+        description: "Season of the year."
+      - name: IsHoliday
+        description: "Indicates if the date is a holiday."
+      - name: IsWeekend
+        description: "Indicates if the date is a weekend."
+      - name: IsPeakHour
+        description: "Indicates if the hour is a peak hour."
+
+  - name: fact_heating_energy_usage
+    description: "Fact table for heating energy usage."
+    columns:
+      - name: FactID
+        description: "Primary key for the fact table."
+        tests:
+          - unique
+          - not_null
+      - name: TimeKey
+        description: "Foreign key to the time dimension."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_time')
+              field: TimeKey
+      - name: DeviceKey
+        description: "Foreign key to the device dimension."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_device')
+              field: DeviceKey
+      - name: LocationKey
+        description: "Foreign key to the location dimension."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_location')
+              field: LocationKey
+      - name: ASHP_Power
+        description: "Power usage of the air source heat pump."
+      - name: ElectricityPrice
+        description: "Electricity price at the time of usage."
+      - name: IndoorTemp
+        description: "Indoor temperature."
+      - name: IndoorHumidityPerc
+        description: "Indoor humidity percentage."
+      - name: IndoorHumidityAbs
+        description: "Indoor absolute humidity."
+      - name: IndoorAir_pm25
+        description: "Indoor air particulate matter (PM2.5)."
+      - name: IndoorAir_pm10
+        description: "Indoor air particulate matter (PM10)."
+      - name: OutdoorTemp
+        description: "Outdoor temperature."
+      - name: OutdoorHumidityPerc
+        description: "Outdoor humidity percentage."
+      - name: AirPressure
+        description: "Air pressure."
+      - name: WindSpeed
+        description: "Wind speed."
+      - name: WindDir
+        description: "Wind direction."
+      - name: Precipitation
+        description: "Precipitation level."
+      - name: UV_index
+        description: "UV index."
+      - name: Illumination
+        description: "Illumination level."
+      - name: Irradiation
+        description: "Solar irradiation."
