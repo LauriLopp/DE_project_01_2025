@@ -13,6 +13,8 @@ services:
       - "8123:8123" # HTTP interface
       - "9000:9000" # Native client interface
     volumes:
+      # Persist ClickHouse database data between restarts
+      - ./clickhouse_data:/var/lib/clickhouse
       # This makes our local CSVs available inside the container.
       - ./sample_data:/var/lib/clickhouse/user_files
       # Mount local SQL files to run them via the ClickHouse client.
@@ -38,6 +40,8 @@ services:
     volumes:
       - ./sample_data:/var/lib/clickhouse/user_files # Shared folder for input files
       - ./sql:/sql                                  # Shared SQL scripts
-      - ./dbt_project:/dbt                                  # Mount local dbt project directory
+      - ./dbt:/dbt                                  # Mount local dbt project directory
     working_dir: /dbt          # Set dbt project directory as the working directory
+    environment:
+      DBT_PROFILES_DIR: /dbt   # Make dbt use profiles.yml from the mounted project directory
     tty: true                  # Keep container running for interactive dbt commands
