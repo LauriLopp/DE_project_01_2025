@@ -21,6 +21,7 @@ WITH base AS (
 	FROM {{ source('raw_data', 'iot_andmed') }}
 )
 SELECT
+	row_number() over () as IoTKey,
 	timestamp,
 	-- Power sensors
 	maxIf(value, entity_id = 'sensor.ohksoojus_power')                         AS heat_pump_power,

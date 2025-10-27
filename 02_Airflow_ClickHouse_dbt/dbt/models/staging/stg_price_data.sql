@@ -28,6 +28,7 @@ WITH raw AS (
 	FROM raw
 )
 SELECT
+	row_number() over () as PriceKey,
 	timestamp,
 	/* Convert cents -> EUR per kWh */
 	price_with_vat_cents / 100.0       AS price_eur_with_vat,
