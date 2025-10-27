@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: raw_data
+    database: raw_data   # ClickHouse database loaded from CSVs
+    schema: default      # clickhouse adapter expects a schema key; keep 'default'
+    tables:
+      - name: iot_andmed
+      - name: meteo_physicum
+      - name: np_tunnihinnad
+      - name: device_data
+      - name: location_data

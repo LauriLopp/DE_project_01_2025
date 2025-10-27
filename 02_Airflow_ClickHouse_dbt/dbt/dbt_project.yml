@@ -8,3 +8,6 @@ clean-targets: ["target"]
 models:
   clickhouse_dbt_demo:
     +materialized: table
+    staging:
+      +schema: staging  # Place staging models in a separate database (schema) "staging"
+      +materialized: view

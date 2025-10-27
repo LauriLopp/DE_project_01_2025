@@ -54,3 +54,27 @@ AS
 SELECT *
 FROM file('c:/Users/loppl/Documents_C/MAKA/DE_aka_Andmetehnika/DE_project_2025/NP tunnihinnad    071224-170325.csv',
           'CSVWithNames');
+
+/*
+ Additional raw tables for device and location sample CSVs.
+ Prefer reading from user_files mount to work inside the container.
+ The compose.yml mounts ./sample_data -> /var/lib/clickhouse/user_files
+*/
+
+-- 4) Device model info
+DROP TABLE IF EXISTS raw_data.device_data;
+CREATE TABLE raw_data.device_data
+ENGINE = MergeTree
+ORDER BY tuple()
+AS
+SELECT *
+FROM file('user_files/device_data.csv', 'CSVWithNames');
+
+-- 5) Device location SCD history
+DROP TABLE IF EXISTS raw_data.location_data;
+CREATE TABLE raw_data.location_data
+ENGINE = MergeTree
+ORDER BY tuple()
+AS
+SELECT *
+FROM file('user_files/location_data.csv', 'CSVWithNames');
