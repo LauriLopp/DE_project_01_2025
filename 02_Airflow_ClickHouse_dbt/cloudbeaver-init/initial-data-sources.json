@@ -1,0 +1,13 @@
+{
+  "dataSources": [
+    {
+      "name": "ClickHouse (HTTP)",
+      "driver": "clickhouse",
+      "host": "clickhouse-server",
+      "port": 8123,
+      "database": "default",
+      "user": "airflow",
+      "password": "supersecret"
+    }
+  ]
+}
