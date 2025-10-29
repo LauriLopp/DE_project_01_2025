@@ -1,0 +1,151 @@
+services:
+  #  Airflow metadata database
+  airflow-db:
+    container_name: de_project2_airflow_db
+    image: postgres:16.4
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+      - AIRFLOW__CORE__FERNET_KEY=B34E7pmv18aZl4g6z105ChW7zHsZjsfmGMSvveDaTQ0=
+    volumes:
+      - airflow-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      retries: 5
+    restart: always
+
+  #  ClickHouse Server
+  # This is the data warehouse 
+  clickhouse-server:
+    container_name: de_project2_clickhouse_server
+    image: clickhouse/clickhouse-server:24.4
+    environment:
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+      CLICKHOUSE_USER: airflow
+      CLICKHOUSE_PASSWORD: supersecret
+      CLICKHOUSE_DB: default
+    ports:
+      - "9000:9000" 
+      - "18123:8123" 
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./config/users.d:/etc/clickhouse-server/users.d
+    restart: always
+
+  #  ClickHouse Web UI
+  clickhouse-ui:
+    container_name: de_project2_clickhouse-ui
+    image: dbeaver/cloudbeaver:latest 
+    environment:
+      - CB_SERVER_ANONYMOUS_ACCESS_ENABLED=true
+    ports:
+      - "8978:8978" 
+    volumes:
+      - cloudbeaver-data:/opt/cloudbeaver/workspace #  Volume to store connections
+      - ./cloudbeaver-init/initial-data-sources.json:/opt/cloudbeaver/workspace/GlobalConfiguration/initial-data-sources.json:ro
+    depends_on:
+      - clickhouse-server
+    restart: always
+
+  #  Airflow Webserver 
+  airflow-webserver:
+    image: apache/airflow:2.8.1
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: de_project2_airflow_webserver
+    command: webserver
+    env_file:
+      - .env.local
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@de_project2_airflow_db:5432/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - AIRFLOW__CORE__FERNET_KEY=B34E7pmv18aZl4g6z105ChW7zHsZjsfmGMSvveDaTQ0=
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./data:/opt/airflow/data
+    depends_on:
+      - airflow-init
+      - clickhouse-server 
+    restart: always
+
+  #  Airflow Scheduler  
+  airflow-scheduler:
+    image: apache/airflow:2.8.1
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: de_project2_airflow_scheduler
+    command: scheduler
+    env_file:
+      - .env.local
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@de_project2_airflow_db:5432/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__CORE__FERNET_KEY=B34E7pmv18aZl4g6z105ChW7zHsZjsfmGMSvveDaTQ0=
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./data:/opt/airflow/data
+    depends_on:
+      - airflow-init
+      - clickhouse-server
+    restart: always
+
+  # Airflow DB initialization
+  airflow-init:
+    image: apache/airflow:2.8.1
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: de_project2_airflow_init
+    env_file:
+      - .env.local
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db init
+        airflow users create \
+          --username airflow \
+          --password airflow \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com
+
+        airflow connections add clickhouse_default \
+          --conn-uri "clickhouse+native://airflow:supersecret@de_project2_clickhouse_server:9000/default" || true
+
+        airflow connections add elering_api \
+          --conn-uri "https://dashboard.elering.ee" || true
+
+        if [ -n "$$HA_BASE" ] && [ -n "$$HA_TOKEN" ]; then
+          airflow connections add home_assistant_api \
+            --conn-type http \
+            --conn-host "$$HA_BASE" \
+            --conn-password "$$HA_TOKEN" || true
+          echo "Created 'home_assistant_api' pointing to $$HA_BASE"
+        else
+          echo "Skipped 'home_assistant_api' (set HA_BASE and HA_TOKEN in .env.local)."
+        fi
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@de_project2_airflow_db:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=B34E7pmv18aZl4g6z105ChW7zHsZjsfmGMSvveDaTQ0=
+    depends_on:
+      - airflow-db
+    restart: "no"
+
+volumes:
+  airflow-pgdata:
+  clickhouse-data:
+  cloudbeaver-data:
