@@ -1,0 +1,13 @@
+clickhouse_dbt_demo:
+  target: dev
+  outputs:
+    dev:
+      type: clickhouse
+      host: clickhouse-server
+      port: 8123
+      user: default
+      password: ""
+      secure: False
+      verify: False
+      database: bronze
+      schema: bronze

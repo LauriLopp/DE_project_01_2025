@@ -1,0 +1,1 @@
+{"_invocation_id": "aae1233e-16ae-4019-9262-5554cec3d1f9", "linked": {"0": {"name": "model.clickhouse_dbt_demo.raw_np_prices", "type": "model"}, "1": {"name": "seed.clickhouse_dbt_demo.raw_iot_data", "type": "seed"}, "2": {"name": "seed.clickhouse_dbt_demo.raw_meteo_data", "type": "seed"}}}

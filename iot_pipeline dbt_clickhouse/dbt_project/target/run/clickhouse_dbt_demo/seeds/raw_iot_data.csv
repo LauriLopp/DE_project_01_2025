@@ -1,0 +1,26 @@
+
+    
+    
+    
+    create table `bronze`.`raw_iot_data` 
+   (entity_id String,state Float64,last_changed DateTime('UTC'))
+    
+  engine = MergeTree()
+    
+      order by (tuple())
+    
+  ;
+    -- dbt seed --
+    
+  
+  
+
+  
+    
+
+    
+  
+
+
+;
+  
