@@ -32,22 +32,40 @@ services:
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - ./config/users.d:/etc/clickhouse-server/users.d
+      - ./clickhouse-init:/docker-entrypoint-initdb.d
     restart: always
 
   #  ClickHouse Web UI
+
   clickhouse-ui:
     container_name: de_project2_clickhouse-ui
-    image: dbeaver/cloudbeaver:latest 
+    image: dbeaver/cloudbeaver:latest
     environment:
-      - CB_SERVER_ANONYMOUS_ACCESS_ENABLED=true
+      - CB_ADMIN_NAME=cbadmin
+      - CB_ADMIN_PASSWORD=CloudBeaver1
+      - CB_SERVER_NAME=Project ClickHouse
     ports:
-      - "8978:8978" 
+      - "8978:8978"
+    user: "0"  # run as root to copy the seed and fix permissions
     volumes:
-      - cloudbeaver-data:/opt/cloudbeaver/workspace #  Volume to store connections
-      - ./cloudbeaver-init/initial-data-sources.json:/opt/cloudbeaver/workspace/GlobalConfiguration/initial-data-sources.json:ro
+      - cloudbeaver-data:/opt/cloudbeaver/workspace
+      # mount the seed file READ-ONLY in a separate path (NOT over the workspace)
+      - ./cloudbeaver-init/.dbeaver/data-sources.json:/opt/cloudbeaver/seed/data-sources.json:ro
+    command: >
+      /bin/sh -lc '
+        TARGET="/opt/cloudbeaver/workspace/GlobalConfiguration/.dbeaver/data-sources.json";
+        mkdir -p /opt/cloudbeaver/workspace/GlobalConfiguration/.dbeaver;
+        # copy seed only if missing or empty
+        if [ ! -s "$$TARGET" ] && [ -f /opt/cloudbeaver/seed/data-sources.json ]; then
+          cp /opt/cloudbeaver/seed/data-sources.json "$$TARGET" || true;
+        fi;
+        chmod -R a+rwX /opt/cloudbeaver/workspace;
+        exec /opt/cloudbeaver/run-server.sh
+      '
     depends_on:
       - clickhouse-server
     restart: always
+
 
   #  Airflow Webserver 
   airflow-webserver:
