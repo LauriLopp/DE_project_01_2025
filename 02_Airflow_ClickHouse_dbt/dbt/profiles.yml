@@ -6,6 +6,6 @@ clickhouse_dbt_demo:     # must match "profile" in dbt_project.yml
       schema: default
       host: clickhouse-server
       port: 8123
-      user: default
-      password: ""
+      user: airflow
+      password: supersecret
       secure: false

@@ -1,9 +1,9 @@
 version: 2
 
 sources:
-  - name: raw_data
-    database: raw_data   # ClickHouse database loaded from CSVs
-    schema: raw_data      # clickhouse adapter expects a schema key; keep 'default'
+  - name: bronze_iot_raw_data
+    database: bronze_iot_raw_data   # ClickHouse database loaded from CSVs
+    schema: bronze_iot_raw_data     # clickhouse adapter expects a schema key; keep 'default'
     tables:
       - name: iot_andmed
       - name: meteo_physicum
