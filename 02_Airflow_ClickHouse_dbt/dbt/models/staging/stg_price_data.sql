@@ -23,8 +23,8 @@ WITH raw AS (
 		/* Parse dd.MM.yyyy HH:mm as local time (no shift) and keep type as DateTime('Europe/Tallinn') */
 		CAST(parseDateTimeBestEffortOrNull(period_raw, 'Europe/Tallinn') AS DateTime('Europe/Tallinn')) AS timestamp,
 		/* Convert decimal comma to dot and cast to float (values are cents/kWh) */
-		toFloat64OrNull(replaceAll(price_with_vat_cents_raw, ',', '.'))      AS price_with_vat_cents,
-		toFloat64OrNull(replaceAll(price_without_vat_cents_raw, ',', '.'))   AS price_without_vat_cents
+		price_with_vat_cents_raw  AS price_with_vat_cents,
+		price_without_vat_cents_raw  AS price_without_vat_cents
 	FROM raw
 )
 SELECT

@@ -4,7 +4,7 @@
   )
 }}
 
--- Gold layer: DIM_LOCATIONS
+-- Gold layer: DIM_LOCATION
 -- This dimension table is derived from the stg_location staging table.
 -- It includes the following columns:
 --   - LocationKey: Primary key
@@ -20,8 +20,8 @@ SELECT
   ClosestWeatherStation,
   PricingRegion,
   ValidFrom,
-  COALESCE(ValidTo, '9999-12-31') AS ValidTo
+  COALESCE(ValidTo, toDate('9999-12-31')) AS ValidTo
 FROM {{ ref('stg_location') }}
 WHERE DeviceLocation IS NOT NULL 
   AND ClosestWeatherStation IS NOT NULL 
-  AND PricingRegion IS NOT NULL;
+  AND PricingRegion IS NOT NULL

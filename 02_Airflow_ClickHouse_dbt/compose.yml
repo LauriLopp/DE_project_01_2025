@@ -1,8 +1,12 @@
+volumes:
+  clickhouse_data_volume: # This defines a new named volume
+
 services:
   clickhouse-server:
     # ClickHouse analytical database server
     image: clickhouse/clickhouse-server
     container_name: clickhouse-server
+    user: "clickhouse:clickhouse"
     environment:
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: ""
@@ -14,7 +18,7 @@ services:
       - "9000:9000" # Native client interface
     volumes:
       # Persist ClickHouse database data between restarts
-      - ./clickhouse_data:/var/lib/clickhouse
+      - clickhouse_data_volume:/var/lib/clickhouse
       # This makes our local CSVs available inside the container.
       - ./sample_data:/var/lib/clickhouse/user_files
       # Mount local SQL files to run them via the ClickHouse client.
@@ -25,23 +29,23 @@ services:
         soft: 262144
         hard: 262144
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8123/ping"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8123/ping" ]
       interval: 5s
       retries: 20
 
   dbt:
     # dbt container for building and testing ClickHouse models
     build:
-      context: .               # Build context is the current directory
-      dockerfile: Dockerfile   # Use the Dockerfile in this directory to build dbt image
+      context: . # Build context is the current directory
+      dockerfile: Dockerfile # Use the Dockerfile in this directory to build dbt image
     container_name: dbt
     depends_on:
-      - clickhouse-server      # Ensure ClickHouse starts before dbt
+      - clickhouse-server # Ensure ClickHouse starts before dbt
     volumes:
       - ./sample_data:/var/lib/clickhouse/user_files # Shared folder for input files
-      - ./sql:/sql                                  # Shared SQL scripts
-      - ./dbt:/dbt                                  # Mount local dbt project directory
-    working_dir: /dbt          # Set dbt project directory as the working directory
+      - ./sql:/sql # Shared SQL scripts
+      - ./dbt:/dbt # Mount local dbt project directory
+    working_dir: /dbt # Set dbt project directory as the working directory
     environment:
-      DBT_PROFILES_DIR: /dbt   # Make dbt use profiles.yml from the mounted project directory
-    tty: true                  # Keep container running for interactive dbt commands
+      DBT_PROFILES_DIR: /dbt # Make dbt use profiles.yml from the mounted project directory
+    tty: true # Keep container running for interactive dbt commands

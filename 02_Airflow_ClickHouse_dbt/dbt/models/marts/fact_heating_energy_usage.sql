@@ -40,7 +40,7 @@ WITH base_data AS (
     ON toStartOfHour(i.timestamp) = t.FullDate + INTERVAL t.HourOfDay HOUR
   JOIN {{ ref('dim_device') }} d
     ON i.timestamp BETWEEN d.InstallationDate AND d.ValidTo
-  JOIN {{ ref('dim_locations') }} l
+  JOIN {{ ref('dim_location') }} l
     ON i.timestamp BETWEEN l.ValidFrom AND l.ValidTo
   LEFT JOIN {{ ref('stg_weather_data') }} w
     ON toStartOfHour(i.timestamp) = w.timestamp
@@ -48,4 +48,4 @@ WITH base_data AS (
     ON toStartOfHour(i.timestamp) = p.timestamp
 )
 SELECT *
-FROM base_data;
+FROM base_data

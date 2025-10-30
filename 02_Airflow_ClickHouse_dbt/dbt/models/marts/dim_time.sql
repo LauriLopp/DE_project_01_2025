@@ -21,15 +21,20 @@
 
 WITH time_range AS (
   SELECT
-    min(timestamp) AS start_time,
-    max(timestamp) AS end_time
+    COALESCE(min(timestamp), now()) AS start_time,
+    COALESCE(max(timestamp), now()) AS end_time
   FROM {{ ref('stg_iot_data') }}
 ),
 all_times AS (
   SELECT
-    toDateTime(start_time + number * 3600) AS timestamp
-  FROM time_range,
-       numbers(dateDiff('hour', start_time, end_time) + 1)
+    toDateTime(
+      (SELECT start_time FROM time_range) + number * 3600
+    ) AS timestamp
+  FROM numbers(
+    assumeNotNull(
+      (SELECT dateDiff('hour', start_time, end_time) + 1 FROM time_range)
+    )
+  )
 ),
 base_time AS (
   SELECT
@@ -51,7 +56,7 @@ base_time AS (
 ),
 holidays AS (
   SELECT
-    toDate(date) AS holiday_date
+    toDate(timestamp) AS holiday_date
   FROM {{ ref('estonian_holidays') }}
 )
 SELECT
@@ -68,4 +73,4 @@ SELECT
   bt.IsPeakHour
 FROM base_time bt
 LEFT JOIN holidays h
-  ON bt.FullDate = h.holiday_date;
+  ON bt.FullDate = h.holiday_date

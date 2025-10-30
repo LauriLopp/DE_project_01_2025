@@ -15,7 +15,7 @@
 WITH base AS (
 	SELECT
 		-- Parse IoT timestamps (often ISO with 'Z') and convert to local time
-		toTimeZone(parseDateTimeBestEffortOrNull(last_changed), 'Europe/Tallinn') AS timestamp,
+		toTimeZone(last_changed, 'Europe/Tallinn') as timestamp,
 		entity_id,
 		toFloat64OrNull(state)                                                    AS value
 	FROM {{ source('raw_data', 'iot_andmed') }}

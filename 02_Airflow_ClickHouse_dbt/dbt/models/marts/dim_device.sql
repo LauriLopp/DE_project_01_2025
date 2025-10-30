@@ -20,6 +20,6 @@ SELECT
   Model,
   MinPower,
   InstallationDate,
-  COALESCE(ValidTo, '9999-12-31') AS ValidTo
+  COALESCE(ValidTo, toDate('9999-12-31')) AS ValidTo
 FROM {{ ref('stg_device') }}
-WHERE Brand IS NOT NULL AND Model IS NOT NULL;
+WHERE Brand IS NOT NULL AND Model IS NOT NULL
