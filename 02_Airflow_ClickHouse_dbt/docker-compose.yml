@@ -44,8 +44,6 @@ services:
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - ./device_location_data:/var/lib/clickhouse/user_files # local CSVs for device and location data
-      # - ./sample_data:/var/lib/clickhouse/user_files # your local mount for CSVs
-      - ./sql:/sql # your SQL scripts
       - ./config/users.d:/etc/clickhouse-server/users.d
       - ./clickhouse-init:/docker-entrypoint-initdb.d
     restart: always
@@ -206,8 +204,6 @@ services:
     depends_on:
       - clickhouse-server
     volumes:
-      - ./device_location_data:/var/lib/clickhouse/user_files
-      - ./sql:/sql
       - ./dbt:/dbt
     working_dir: /dbt
     environment:
