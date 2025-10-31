@@ -25,7 +25,7 @@ WITH raw AS (
 		wind_gust_speed_kmh / 3.6	AS wind_gust_speed_ms,
 		wind_speed_kmh / 3.6      	AS wind_speed_ms,
 		condition_state            AS condition_state
-	FROM {{ source('bronze_layer', 'bronze_weather_current') }}
+	FROM {{ source('bronze_layer', 'bronze_weather_history') }}
 ),
 
 aggregated AS (

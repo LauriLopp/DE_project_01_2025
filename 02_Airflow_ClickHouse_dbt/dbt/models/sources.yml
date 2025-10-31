@@ -6,7 +6,7 @@ sources:
     schema: default     # clickhouse adapter expects a schema key; keep 'default'
     tables:
       - name: bronze_iot_raw_data
-      - name: bronze_weather_current
+      - name: bronze_weather_history
       - name: bronze_elering_price
       - name: bronze_location
       - name: bronze_device
