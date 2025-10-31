@@ -1,0 +1,23 @@
+{
+  "folders": {},
+  "connections": {
+    "clickhouse-http-auto": {
+      "provider": "clickhouse",
+      "driver": "clickhouse",
+      "name": "ClickHouse (HTTP)",
+      "save-password": true,
+      "show-system-objects": true,
+      "authModel": "native",
+      "credentials": { "user": "airflow", "password": "supersecret" },
+      "configuration": {
+        "host": "clickhouse-server",
+        "port": "8123",
+        "database": "default",
+        "url": "jdbc:clickhouse://clickhouse-server:8123/default",
+        "configurationType": "MANUAL",
+        "type": "dev",
+        "closeIdleConnection": true
+      }
+    }
+  }
+}
