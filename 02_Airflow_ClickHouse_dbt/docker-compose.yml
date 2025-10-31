@@ -43,13 +43,14 @@ services:
       - "18123:8123" # HTTP interface (Airflow-compatible)
     volumes:
       - clickhouse-data:/var/lib/clickhouse
-      - ./sample_data:/var/lib/clickhouse/user_files # your local mount for CSVs
+      - ./device_location_data:/var/lib/clickhouse/user_files # local CSVs for device and location data
+      # - ./sample_data:/var/lib/clickhouse/user_files # your local mount for CSVs
       - ./sql:/sql # your SQL scripts
       - ./config/users.d:/etc/clickhouse-server/users.d
       - ./clickhouse-init:/docker-entrypoint-initdb.d
     restart: always
 
-  #  ClickHouse Web UI
+    #  ClickHouse Web UI
 
     ulimits:
       nofile:
@@ -72,7 +73,7 @@ services:
       - CB_SERVER_NAME=Project ClickHouse
     ports:
       - "8978:8978"
-    user: "0"  # run as root to copy the seed and fix permissions
+    user: "0" # run as root to copy the seed and fix permissions
     volumes:
       - cloudbeaver-data:/opt/cloudbeaver/workspace
       # mount the seed file READ-ONLY in a separate path (NOT over the workspace)
@@ -205,7 +206,7 @@ services:
     depends_on:
       - clickhouse-server
     volumes:
-      - ./sample_data:/var/lib/clickhouse/user_files
+      - ./device_location_data:/var/lib/clickhouse/user_files
       - ./sql:/sql
       - ./dbt:/dbt
     working_dir: /dbt

@@ -230,6 +230,35 @@ def fetch_and_load_weather_current(**context):
 
     print(f"Inserted weather snapshot for {entity_id} @ {last_changed}")
 
+def create_device_and_location_tables():
+    """
+    Create and load static bronze_device and bronze_location tables from CSVs.
+    """
+    ch = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
+
+    sql_device = """
+    CREATE TABLE IF NOT EXISTS bronze_device
+    ENGINE = MergeTree()
+    ORDER BY tuple()
+    AS
+    SELECT *
+    FROM file('/var/lib/clickhouse/user_files/device_data.csv', 'CSVWithNames')
+    """
+
+    sql_location = """
+    CREATE TABLE IF NOT EXISTS bronze_location
+    ENGINE = MergeTree()
+    ORDER BY tuple()
+    AS
+    SELECT *
+    FROM file('/var/lib/clickhouse/user_files/location_data.csv', 'CSVWithNames')
+    """
+
+    ch.execute(sql_device)
+    ch.execute(sql_location)
+
+    print("Loaded bronze_device and bronze_location from CSVs into schema.")
+
 with DAG(
     dag_id="home_assistant_continuous_raw",
     start_date=datetime(2025, 10, 20),
@@ -258,6 +287,12 @@ with DAG(
         task_id="fetch_and_load_weather_current",
         python_callable=fetch_and_load_weather_current,
     )
+
+    create_static_tables = PythonOperator(
+        task_id="create_device_and_location_tables",
+        python_callable=create_device_and_location_tables,
+    )
+
     
 
-    create_table >> fetch_load >> fetch_price >> fetch_weather_current
+    create_table >> create_static_tables >> fetch_load >> fetch_price >> fetch_weather_current

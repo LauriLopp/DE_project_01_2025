@@ -15,7 +15,7 @@
 
 WITH base_data AS (
   SELECT
-    row_number() OVER () AS FactID, -- Primary key
+    row_number() OVER () AS FactID,
     t.TimeKey,
     d.DeviceKey,
     l.LocationKey,
@@ -42,14 +42,14 @@ WITH base_data AS (
   FROM {{ ref('stg_iot_data') }} i
   JOIN {{ ref('dim_time') }} t
     ON i.hour_start = t.FullDate + INTERVAL t.HourOfDay HOUR
-  JOIN {{ ref('dim_device') }} d
-    ON i.hour_start BETWEEN d.InstallationDate AND d.ValidTo
-  JOIN {{ ref('dim_location') }} l
-    ON i.hour_start BETWEEN l.ValidFrom AND l.ValidTo
+  , {{ ref('dim_device') }} d
+  , {{ ref('dim_location') }} l
   LEFT JOIN {{ ref('stg_weather_data') }} w
     ON i.hour_start = w.timestamp
   LEFT JOIN {{ ref('stg_price_data') }} p
     ON i.hour_start = p.timestamp
+  WHERE i.hour_start BETWEEN d.InstallationDate AND d.ValidTo
+    AND i.hour_start BETWEEN l.ValidFrom AND l.ValidTo
 )
 SELECT *
 FROM base_data

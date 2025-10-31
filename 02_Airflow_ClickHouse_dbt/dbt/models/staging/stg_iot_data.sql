@@ -18,7 +18,7 @@ WITH base AS (
 		toTimeZone(last_changed, 'Europe/Tallinn') as timestamp,
 		entity_id,
 		toFloat64OrNull(state)                                                    AS value
-	FROM {{ source('bronze_iot_raw_data', 'bronze_iot_raw_data') }}
+	FROM {{ source('bronze_layer', 'bronze_iot_raw_data') }}
 )
 SELECT
 	row_number() over () as IoTKey,

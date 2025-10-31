@@ -16,7 +16,7 @@ WITH raw AS (
 	SELECT
 		toTimeZone(ts_utc, 'Europe/Tallinn') AS timestamp_raw,
 		price_per_mwh AS price_eur_per_mwh
-	FROM {{ source('bronze_iot_raw_data', 'bronze_elering_price') }}
+	FROM {{ source('bronze_layer', 'bronze_elering_price') }}
 ), aggregated AS (
 	SELECT
 		toStartOfHour(timestamp_raw) AS timestamp,
@@ -28,6 +28,6 @@ SELECT
 	row_number() over () as PriceKey,
 	timestamp,
 	/* Convert EUR/MWh -> EUR/kWh */
-	avg_price_eur_per_mwh / 1000.0 AS price_eur_per_kwh,
+	avg_price_eur_per_mwh / 1000.0 AS price_eur_per_kwh
 FROM aggregated
 WHERE timestamp IS NOT NULL

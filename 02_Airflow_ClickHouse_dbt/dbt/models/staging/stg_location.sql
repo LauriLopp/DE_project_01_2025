@@ -8,4 +8,4 @@
 select
   row_number() over () as LocationKey,
   *
-from {{ source('bronze_iot_raw_data', 'bronze_location') }}
+from {{ source('bronze_layer', 'bronze_location') }}
