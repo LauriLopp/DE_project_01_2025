@@ -15,37 +15,41 @@
 
 WITH base_data AS (
   SELECT
-    row_number() OVER () AS FactID, -- Primary key
+    row_number() OVER () AS FactID,
     t.TimeKey,
     d.DeviceKey,
     l.LocationKey,
-    i.heat_pump_power AS ASHP_Power,
-    p.price_eur_with_vat AS ElectricityPrice,
-    i.living_room_temp AS IndoorTemp,
-    i.living_room_hum_perc AS IndoorHumidityPerc,
-    i.living_room_hum_abs AS IndoorHumidityAbs,
-    i.air_purifier_2_5 AS IndoorAir_pm25,
-    i.air_purifier_10 AS IndoorAir_pm10,
+    p.price_eur_per_kwh AS ElectricityPrice,
+    i.heat_pump_power_avg AS ASHP_Power,
+    i.boiler_power_avg AS Boiler_Power,
+    i.air_drier_power_avg AS Air_Drier_Power,
+    i.boiler_voltage_avg AS Boiler_Voltage,
+    i.living_room_temp_avg AS IndoorTemp,
+    i.living_room_hum_perc_avg AS IndoorHumidityPerc,
+    i.living_room_hum_abs_avg AS IndoorHumidityAbs,
+    i.wc_hum_abs_avg AS WC_HumidityAbs,
+    i.wc_temp_avg AS WC_Temp,
     w.temperature_c AS OutdoorTemp,
+    w.dew_point_c AS DewPoint,
     w.humidity_perc AS OutdoorHumidityPerc,
-    w.air_pressure_hpa AS AirPressure,
-    w.wind_speed_ms AS WindSpeed,
-    w.wind_direction_deg AS WindDir,
-    w.precipitation_mm AS Precipitation,
+    w.cloud_coverage_pct AS CloudCoverage,
     w.uv_index AS UV_index,
-    w.illuminance_lux AS Illumination,
-    w.solar_irradiance AS Irradiation
+    w.air_pressure_mmhg AS AirPressure_mmHg,
+    w.wind_direction_deg AS WindDir,
+    w.wind_gust_speed_ms AS WindGustSpeed_ms,
+    w.wind_speed_ms AS WindSpeed_ms,
+    w.condition_state AS WeatherCondition
   FROM {{ ref('stg_iot_data') }} i
   JOIN {{ ref('dim_time') }} t
-    ON toStartOfHour(i.timestamp) = t.FullDate + INTERVAL t.HourOfDay HOUR
-  JOIN {{ ref('dim_device') }} d
-    ON i.timestamp BETWEEN d.InstallationDate AND d.ValidTo
-  JOIN {{ ref('dim_location') }} l
-    ON i.timestamp BETWEEN l.ValidFrom AND l.ValidTo
+    ON i.hour_start = t.FullDate + INTERVAL t.HourOfDay HOUR
+  , {{ ref('dim_device') }} d
+  , {{ ref('dim_location') }} l
   LEFT JOIN {{ ref('stg_weather_data') }} w
-    ON toStartOfHour(i.timestamp) = w.timestamp
+    ON i.hour_start = w.timestamp
   LEFT JOIN {{ ref('stg_price_data') }} p
-    ON toStartOfHour(i.timestamp) = p.timestamp
+    ON i.hour_start = p.timestamp
+  WHERE i.hour_start BETWEEN d.InstallationDate AND d.ValidTo
+    AND i.hour_start BETWEEN l.ValidFrom AND l.ValidTo
 )
 SELECT *
 FROM base_data

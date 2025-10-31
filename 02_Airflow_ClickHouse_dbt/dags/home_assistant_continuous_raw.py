@@ -5,14 +5,24 @@ from airflow.providers.http.hooks.http import HttpHook
 from datetime import datetime, timezone
 import json
 
-# --- CONFIGURATION ---
-# The IoT sensor entity IDs
 HA_IOT_ENTITY_IDS = [
-    "sensor.tempniiskuslauaall_temperature",
-    "sensor.tempniiskuslauaall_humidity",
-    "sensor.ohksoojus_power",
-    "sensor.indoor_absolute_humidity",
-    "sensor.ohukuivati_power"
+    # Power sensors
+    "sensor.ohksoojus_power",                 # heat pump power
+    "sensor.0xa4c138cdc6eff777_power",        # boiler power
+    "sensor.ohukuivati_power",                # air drier power
+
+    # Humidity (absolute and relative)
+    "sensor.abshumidkuu2_absolute_humidity", # living room absolute humidity
+    "sensor.tempniiskuslauaall_humidity",    # living room relative humidity
+    "sensor.indoor_absolute_humidity",       # wc absolute humidity
+
+    # Temperatures
+    "sensor.tempniiskuslauaall_temperature", # living room temperature
+    "sensor.indoor_outdoor_meter_3866",      # wc temperature
+
+    # Voltage sensors
+    "sensor.0xa4c138cdc6eff777_voltage"     # boiler voltage    
+
 ]
 # The specific entity ID for weather history
 HA_WEATHER_ENTITY_ID = "weather.forecast_home"
@@ -174,6 +184,35 @@ def fetch_weather_history(**context):
 
 
 # --- DAG DEFINITION ---
+def create_device_and_location_tables():
+    """
+    Create and load static bronze_device and bronze_location tables from CSVs.
+    """
+    ch = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
+
+    sql_device = """
+    CREATE TABLE IF NOT EXISTS bronze_device
+    ENGINE = MergeTree()
+    ORDER BY tuple()
+    AS
+    SELECT *
+    FROM file('/var/lib/clickhouse/user_files/device_data.csv', 'CSVWithNames')
+    """
+
+    sql_location = """
+    CREATE TABLE IF NOT EXISTS bronze_location
+    ENGINE = MergeTree()
+    ORDER BY tuple()
+    AS
+    SELECT *
+    FROM file('/var/lib/clickhouse/user_files/location_data.csv', 'CSVWithNames')
+    """
+
+    ch.execute(sql_device)
+    ch.execute(sql_location)
+
+    print("Loaded bronze_device and bronze_location from CSVs into schema.")
+
 with DAG(
     dag_id="continuous_ingestion_pipeline",
     start_date=datetime(2025, 10, 20),
@@ -187,6 +226,8 @@ with DAG(
     task_setup_iot = PythonOperator(task_id="setup_iot_table", python_callable=setup_bronze_iot_table)
     task_setup_price = PythonOperator(task_id="setup_price_table", python_callable=setup_bronze_price_table)
     task_setup_weather = PythonOperator(task_id="setup_weather_table", python_callable=setup_bronze_weather_table)
+    task_create_static_tables = PythonOperator(task_id="create_device_and_location_tables", python_callable=create_device_and_location_tables,
+    )
 
     # Ingestion tasks to fetch and load data
     task_fetch_iot = PythonOperator(task_id="fetch_iot_history", python_callable=fetch_iot_history)
@@ -197,3 +238,5 @@ with DAG(
     task_setup_iot >> task_fetch_iot
     task_setup_price >> task_fetch_price
     task_setup_weather >> task_fetch_weather
+    task_create_static_tables
+    
