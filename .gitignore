@@ -24,6 +24,10 @@ pgdata/
 # VS Code
 .vscode/
 
+# .env files
+.env.local
+connections.json
+data/connections.json
 # GitHub config (actions, templates)
 /.github/
 
