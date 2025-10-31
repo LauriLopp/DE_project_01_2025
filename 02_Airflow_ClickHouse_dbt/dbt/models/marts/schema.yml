@@ -97,22 +97,25 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('dim_time')
-              field: TimeKey
+              arguments:
+                to: ref('dim_time')
+                field: TimeKey
       - name: DeviceKey
         description: "Foreign key to the device dimension."
         tests:
           - not_null
           - relationships:
-              to: ref('dim_device')
-              field: DeviceKey
+              arguments:
+                to: ref('dim_device')
+                field: DeviceKey
       - name: LocationKey
         description: "Foreign key to the location dimension."
         tests:
           - not_null
           - relationships:
-              to: ref('dim_location')
-              field: LocationKey
+              arguments:
+                to: ref('dim_location')
+                field: LocationKey
       - name: ASHP_Power
         description: "Power usage of the air source heat pump."
       - name: ElectricityPrice

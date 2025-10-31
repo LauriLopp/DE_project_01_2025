@@ -7,11 +7,22 @@ from datetime import datetime, timedelta, timezone
 import json
 
 ENTITY_IDS = [
-    "sensor.tempniiskuslauaall_temperature",
-    "sensor.tempniiskuslauaall_humidity",
-    "sensor.ohksoojus_power",
-    "sensor.indoor_absolute_humidity",
-    "sensor.ohukuivati_power"
+    # Power sensors
+    "sensor.ohksoojus_power",                 # heat pump power
+    "sensor.0xa4c138cdc6eff777_power",        # boiler power
+    "sensor.ohukuivati_power",                # air drier power
+
+    # Humidity (absolute and relative)
+    "sensor.abshumidkuu2_absolute_humidity", # living room absolute humidity
+    "sensor.tempniiskuslauaall_humidity",    # living room relative humidity
+    "sensor.indoor_absolute_humidity",       # wc absolute humidity
+
+    # Temperatures
+    "sensor.tempniiskuslauaall_temperature", # living room temperature
+    "sensor.indoor_outdoor_meter_3866",      # wc temperature
+
+    # Voltage sensors
+    "sensor.0xa4c138cdc6eff777_voltage"     # boiler voltage    
 ]
 
 def create_bronze_raw_table():
@@ -109,7 +120,7 @@ def fetch_and_load_elering_price(**context):
     payload = resp.json()
 
     rec = payload["data"][0]                       # {'timestamp': 1761686100, 'price': 78.15}
-    ts_utc = datetime.utcfromtimestamp(rec["timestamp"])  # naive UTC
+    ts_utc = datetime.fromtimestamp(rec["timestamp"], tz=timezone.utc).replace(tzinfo=None)  # naive UTC
     price = float(rec["price"])
     ingestion_ts = datetime.utcnow()
 
@@ -219,6 +230,35 @@ def fetch_and_load_weather_current(**context):
 
     print(f"Inserted weather snapshot for {entity_id} @ {last_changed}")
 
+def create_device_and_location_tables():
+    """
+    Create and load static bronze_device and bronze_location tables from CSVs.
+    """
+    ch = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
+
+    sql_device = """
+    CREATE TABLE IF NOT EXISTS bronze_device
+    ENGINE = MergeTree()
+    ORDER BY tuple()
+    AS
+    SELECT *
+    FROM file('/var/lib/clickhouse/user_files/device_data.csv', 'CSVWithNames')
+    """
+
+    sql_location = """
+    CREATE TABLE IF NOT EXISTS bronze_location
+    ENGINE = MergeTree()
+    ORDER BY tuple()
+    AS
+    SELECT *
+    FROM file('/var/lib/clickhouse/user_files/location_data.csv', 'CSVWithNames')
+    """
+
+    ch.execute(sql_device)
+    ch.execute(sql_location)
+
+    print("Loaded bronze_device and bronze_location from CSVs into schema.")
+
 with DAG(
     dag_id="home_assistant_continuous_raw",
     start_date=datetime(2025, 10, 20),
@@ -247,6 +287,12 @@ with DAG(
         task_id="fetch_and_load_weather_current",
         python_callable=fetch_and_load_weather_current,
     )
+
+    create_static_tables = PythonOperator(
+        task_id="create_device_and_location_tables",
+        python_callable=create_device_and_location_tables,
+    )
+
     
 
-    create_table >> fetch_load >> fetch_price >> fetch_weather_current
+    create_table >> create_static_tables >> fetch_load >> fetch_price >> fetch_weather_current
