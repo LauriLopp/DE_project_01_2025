@@ -2,11 +2,10 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow_clickhouse_plugin.hooks.clickhouse import ClickHouseHook
 from airflow.providers.http.hooks.http import HttpHook
-from datetime import datetime, timedelta, timezone
-
+from datetime import datetime, timezone
 import json
 
-ENTITY_IDS = [
+HA_IOT_ENTITY_IDS = [
     # Power sensors
     "sensor.ohksoojus_power",                 # heat pump power
     "sensor.0xa4c138cdc6eff777_power",        # boiler power
@@ -23,109 +22,32 @@ ENTITY_IDS = [
 
     # Voltage sensors
     "sensor.0xa4c138cdc6eff777_voltage"     # boiler voltage    
+
 ]
-
-def create_bronze_raw_table():
-    """
-    Creates the table for raw, continuous data.
-    """
-    hook = ClickHouseHook(clickhouse_conn_id="clickhouse_default")
-    
-    # 
-    # The get_conn() method returns a raw 'Client' object from the driver.
-    # This object has a direct .execute() method, it does not use cursors.
-    conn = hook.get_conn()
-    
-    sql = """
-    CREATE TABLE IF NOT EXISTS bronze_iot_raw_data (
-        ingestion_ts DateTime,
-        entity_id String,
-        state String,
-        last_changed DateTime,
-        attributes String
-    ) ENGINE = MergeTree()
-    ORDER BY (entity_id, last_changed)
-    """
-    conn.execute(sql) # We call .execute() directly on the connection object.
+# The specific entity ID for weather history
+HA_WEATHER_ENTITY_ID = "weather.forecast_home"
 
 
-def fetch_and_load_continuous(**context):
-    """
-    Fetches the iot devices' values from Home Assistant API
-    and stores it in ClickHouse.
-    """
-    start_dt = context["data_interval_start"]
-    end_dt = context["data_interval_end"]
+# --- DATABASE SETUP TASKS ---
 
-    print(f"--- Continuous Ingestion Run ---")
-    print(f"Fetching data from: {start_dt.isoformat()}")
-    print(f"Fetching data to:   {end_dt.isoformat()}")
+def setup_bronze_iot_table():
+    """Creates the table for raw Home Assistant IoT sensor data."""
+    ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
+    ch_conn.execute("""
+        CREATE TABLE IF NOT EXISTS bronze_iot_raw_data (
+            ingestion_ts DateTime,
+            entity_id String,
+            state String,
+            last_changed DateTime,
+            attributes String
+        ) ENGINE = MergeTree()
+        ORDER BY (entity_id, last_changed)
+    """)
 
-    http_hook = HttpHook(method='GET', http_conn_id='home_assistant_api')
-    ch_hook = ClickHouseHook(clickhouse_conn_id="clickhouse_default")
-    ch = ch_hook.get_conn()  # raw clickhouse_driver.Client
-
-    ha_conn = http_hook.get_connection(http_hook.http_conn_id)
-    headers = {"Authorization": f"Bearer {ha_conn.password}"}
-
-    endpoint = f"api/history/period/{start_dt.isoformat()}"
-    api_params = {
-        "filter_entity_id": ",".join(ENTITY_IDS),
-        "end_time": end_dt.isoformat(),
-    }
-
-    resp = http_hook.run(endpoint=endpoint, data=api_params, headers=headers)
-    history_data = resp.json()
-
-    rows = []
-    ingestion_ts = datetime.utcnow()  # naive UTC expected by CH driver
-
-    for entity_history in history_data:
-        for s in entity_history:
-            ts = s.get("last_changed")
-            # Make it naive UTC for ClickHouse
-            if ts:
-                dt = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(timezone.utc).replace(tzinfo=None)
-            else:
-                dt = None
-            rows.append((
-                ingestion_ts,
-                s.get("entity_id"),
-                s.get("state"),
-                dt,
-                json.dumps(s.get("attributes", {})),
-            ))
-
-    if rows:
-        print(f"Inserting {len(rows)} records for this hour...")
-        ch.execute(
-            "INSERT INTO bronze_iot_raw_data "
-            "(ingestion_ts, entity_id, state, last_changed, attributes) VALUES",
-            rows
-        )
-        print("Success.")
-    else:
-        print("No state changes occurred during this interval.")
-
-
-def fetch_and_load_elering_price(**context):
-    """
-    Fetch current EE electricity price (EUR/MWh) from Elering and store it.
-    """
-    http = HttpHook(method="GET", http_conn_id="elering_api")
-    ch = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
-
-    # Call API (no auth needed)
-    resp = http.run(endpoint="/api/nps/price/EE/current")
-    payload = resp.json()
-
-    rec = payload["data"][0]                       # {'timestamp': 1761686100, 'price': 78.15}
-    ts_utc = datetime.fromtimestamp(rec["timestamp"], tz=timezone.utc).replace(tzinfo=None)  # naive UTC
-    price = float(rec["price"])
-    ingestion_ts = datetime.utcnow()
-
-    # Create table if missing
-    ch.execute("""
+def setup_bronze_price_table():
+    """Creates the table for hourly Elering price data."""
+    ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
+    ch_conn.execute("""
         CREATE TABLE IF NOT EXISTS bronze_elering_price (
             ingestion_ts   DateTime,
             ts_utc         DateTime,
@@ -137,99 +59,131 @@ def fetch_and_load_elering_price(**context):
         ORDER BY (zone, ts_utc)
     """)
 
-    # Insert single row
-    ch.execute(
-        "INSERT INTO bronze_elering_price "
-        "(ingestion_ts, ts_utc, zone, currency, price_per_mwh) VALUES",
-        [(ingestion_ts, ts_utc, "EE", "EUR", price)]
-    )
-    print(f"Inserted EE price {price} EUR/MWh @ {ts_utc.isoformat()}")
-
-def fetch_and_load_weather_current(**context):
-    from datetime import datetime, timezone
-    import json
-    from airflow.providers.http.hooks.http import HttpHook
-    from airflow_clickhouse_plugin.hooks.clickhouse import ClickHouseHook
-
-    http = HttpHook(method="GET", http_conn_id="home_assistant_api")
-    ch = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
-
-    # Create table if it doesn’t exist
-    ch.execute("""
-        CREATE TABLE IF NOT EXISTS bronze_weather_current (
+def setup_bronze_weather_table():
+    """Creates the new, separate table for historical weather data."""
+    ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
+    ch_conn.execute("""
+        CREATE TABLE IF NOT EXISTS bronze_weather_history (
             ingestion_ts        DateTime,
             entity_id           String,
             condition_state     String,
             last_changed        DateTime,
             temperature_C       Nullable(Float64),
-            dew_point_C         Nullable(Float64),
-            humidity_percent    Nullable(Float64),
-            cloud_coverage_pct  Nullable(Float64),
-            uv_index            Nullable(Float64),
             pressure_hPa        Nullable(Float64),
+            humidity_percent    Nullable(Float64),
+            wind_speed_kmh      Nullable(Float64),
             wind_bearing_deg    Nullable(Float64),
-            wind_gust_speed_kmh Nullable(Float64),
-            wind_speed_kmh      Nullable(Float64)
+            cloud_coverage_pct  Nullable(Float64),
+            dew_point_C         Nullable(Float64),
+            uv_index            Nullable(Float64),
+            wind_gust_speed_kmh Nullable(Float64)
         )
         ENGINE = MergeTree()
         ORDER BY (entity_id, last_changed)
     """)
 
-    ha_conn = http.get_connection(http.http_conn_id)
+
+# --- DATA FETCHING TASKS ---
+
+def fetch_iot_history(**context):
+    """Fetches history for IoT SENSORS and loads into bronze_iot_raw_data."""
+    start_dt = context["data_interval_start"]
+    end_dt = context["data_interval_end"]
+    print(f"--- IoT Ingestion: Fetching data from {start_dt.isoformat()} to {end_dt.isoformat()} ---")
+
+    http_hook = HttpHook(method='GET', http_conn_id='home_assistant_api')
+    ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
+    ha_conn = http_hook.get_connection(http_hook.http_conn_id)
     headers = {"Authorization": f"Bearer {ha_conn.password}"}
 
-    # Pull full state for the weather entity
-    resp = http.run(endpoint="api/states/weather.forecast_home", headers=headers)
+    endpoint = f"api/history/period/{start_dt.isoformat()}"
+    api_params = {"filter_entity_id": ",".join(HA_IOT_ENTITY_IDS), "end_time": end_dt.isoformat()}
+
+    resp = http_hook.run(endpoint=endpoint, data=api_params, headers=headers)
+    history_data = resp.json()
+
+    rows = []
+    ingestion_ts = datetime.utcnow()
+    for entity_history in history_data:
+        for s in entity_history:
+            ts = s.get("last_changed")
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(timezone.utc).replace(tzinfo=None) if ts else None
+            rows.append((ingestion_ts, s.get("entity_id"), s.get("state"), dt, json.dumps(s.get("attributes", {}))))
+
+    if rows:
+        ch_conn.execute("INSERT INTO bronze_iot_raw_data VALUES", rows)
+        print(f"Inserted {len(rows)} IoT records.")
+
+def fetch_elering_history(**context):
+    """Fetches historical Elering prices and loads into bronze_elering_price."""
+    start_dt = context["data_interval_start"]
+    end_dt = context["data_interval_end"]
+    print(f"--- Elering Ingestion: Fetching data from {start_dt.isoformat()} to {end_dt.isoformat()} ---")
+
+    http = HttpHook(method="GET", http_conn_id="elering_api")
+    ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
+
+    params = {"start": start_dt.isoformat(), "end": end_dt.isoformat()}
+    resp = http.run(endpoint="/api/nps/price", data=params)
     payload = resp.json()
 
-    entity_id = payload.get("entity_id")
-    condition_state = payload.get("state")
+    if not payload.get("success") or not payload.get("data"):
+        return
 
-    ts = payload.get("last_changed")
-    last_changed = (
-        datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        .astimezone(timezone.utc).replace(tzinfo=None)
-        if ts else None
-    )
+    rows = []
+    ingestion_ts = datetime.utcnow()
+    for rec in payload["data"]["ee"]:
+        rows.append((ingestion_ts, datetime.utcfromtimestamp(rec["timestamp"]), "EE", "EUR", float(rec["price"])))
 
-    attrs = payload.get("attributes", {})
+    if rows:
+        ch_conn.execute("INSERT INTO bronze_elering_price VALUES", rows)
+        print(f"Inserted {len(rows)} Elering price records.")
+
+def fetch_weather_history(**context):
+    """Fetches history for the WEATHER entity and loads into bronze_weather_history."""
+    start_dt = context["data_interval_start"]
+    end_dt = context["data_interval_end"]
+    print(f"--- Weather Ingestion: Fetching data from {start_dt.isoformat()} to {end_dt.isoformat()} ---")
+
+    http_hook = HttpHook(method='GET', http_conn_id='home_assistant_api')
+    ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
+    ha_conn = http_hook.get_connection(http_hook.http_conn_id)
+    headers = {"Authorization": f"Bearer {ha_conn.password}"}
+
+    endpoint = f"api/history/period/{start_dt.isoformat()}"
+    api_params = {"filter_entity_id": HA_WEATHER_ENTITY_ID, "end_time": end_dt.isoformat()}
+
+    resp = http_hook.run(endpoint=endpoint, data=api_params, headers=headers)
+    history_data = resp.json()
+
+    rows = []
     ingestion_ts = datetime.utcnow()
 
-    # Extract numeric fields
-    def f(key):
+    def f(attrs, key):
         v = attrs.get(key)
-        try:
-            return float(v) if v is not None else None
-        except Exception:
-            return None
+        try: return float(v) if v is not None else None
+        except (ValueError, TypeError): return None
 
-    row = (
-        ingestion_ts,
-        entity_id,
-        condition_state,
-        last_changed,
-        f("temperature"),
-        f("dew_point"),
-        f("humidity"),
-        f("cloud_coverage"),
-        f("uv_index"),
-        f("pressure"),
-        f("wind_bearing"),
-        f("wind_gust_speed"),
-        f("wind_speed"),
-    )
+    for entity_history in history_data:
+        for s in entity_history:
+            ts = s.get("last_changed")
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(timezone.utc).replace(tzinfo=None) if ts else None
+            attrs = s.get("attributes", {})
+            rows.append((
+                ingestion_ts, s.get("entity_id"), s.get("state"), dt,
+                f(attrs, "temperature"), f(attrs, "pressure"), f(attrs, "humidity"),
+                f(attrs, "wind_speed"), f(attrs, "wind_bearing"), f(attrs, "cloud_coverage"),
+                f(attrs, "dew_point"),
+                f(attrs, "uv_index"),
+                f(attrs, "wind_gust_speed")
+            ))
 
-    ch.execute("""
-        INSERT INTO bronze_weather_current
-        (ingestion_ts, entity_id, condition_state, last_changed,
-         temperature_C, dew_point_C, humidity_percent, cloud_coverage_pct,
-         uv_index, pressure_hPa, wind_bearing_deg,
-         wind_gust_speed_kmh, wind_speed_kmh)
-        VALUES
-    """, [row])
+    if rows:
+        ch_conn.execute("INSERT INTO bronze_weather_history VALUES", rows)
+        print(f"Inserted {len(rows)} weather records.")
 
-    print(f"Inserted weather snapshot for {entity_id} @ {last_changed}")
 
+# --- DAG DEFINITION ---
 def create_device_and_location_tables():
     """
     Create and load static bronze_device and bronze_location tables from CSVs.
@@ -260,39 +214,29 @@ def create_device_and_location_tables():
     print("Loaded bronze_device and bronze_location from CSVs into schema.")
 
 with DAG(
-    dag_id="home_assistant_continuous_raw",
+    dag_id="continuous_ingestion_pipeline",
     start_date=datetime(2025, 10, 20),
     schedule_interval="@hourly",
     catchup=False,
     max_active_runs=1,
-    tags=['project2', 'ingestion', 'continuous', 'raw']
+    tags=['project2', 'ingestion']
 ) as dag:
 
-    create_table = PythonOperator(
-        task_id="create_bronze_raw_table",
-        python_callable=create_bronze_raw_table,
+    # Setup tasks to ensure tables exist
+    task_setup_iot = PythonOperator(task_id="setup_iot_table", python_callable=setup_bronze_iot_table)
+    task_setup_price = PythonOperator(task_id="setup_price_table", python_callable=setup_bronze_price_table)
+    task_setup_weather = PythonOperator(task_id="setup_weather_table", python_callable=setup_bronze_weather_table)
+    task_create_static_tables = PythonOperator(task_id="create_device_and_location_tables", python_callable=create_device_and_location_tables,
     )
 
-    fetch_load = PythonOperator(
-        task_id="fetch_and_load_continuous",
-        python_callable=fetch_and_load_continuous,
-    )
+    # Ingestion tasks to fetch and load data
+    task_fetch_iot = PythonOperator(task_id="fetch_iot_history", python_callable=fetch_iot_history)
+    task_fetch_price = PythonOperator(task_id="fetch_elering_history", python_callable=fetch_elering_history)
+    task_fetch_weather = PythonOperator(task_id="fetch_weather_history", python_callable=fetch_weather_history)
 
-    fetch_price = PythonOperator(
-        task_id="fetch_and_load_elering_price",
-        python_callable=fetch_and_load_elering_price,
-    )
-
-    fetch_weather_current = PythonOperator(
-        task_id="fetch_and_load_weather_current",
-        python_callable=fetch_and_load_weather_current,
-    )
-
-    create_static_tables = PythonOperator(
-        task_id="create_device_and_location_tables",
-        python_callable=create_device_and_location_tables,
-    )
-
+    # Define dependencies: each stream is independent
+    task_setup_iot >> task_fetch_iot
+    task_setup_price >> task_fetch_price
+    task_setup_weather >> task_fetch_weather
+    task_create_static_tables
     
-
-    create_table >> create_static_tables >> fetch_load >> fetch_price >> fetch_weather_current
