@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: bronze_iot_raw_data
+    database: bronze_iot_raw_data   # ClickHouse database loaded from CSVs
+    schema: bronze_iot_raw_data     # clickhouse adapter expects a schema key; keep 'default'
+    tables:
+      - name: iot_andmed
+      - name: meteo_physicum
+      - name: np_tunnihinnad
+      - name: device_data
+      - name: location_data
