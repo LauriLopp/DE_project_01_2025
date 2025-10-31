@@ -7,11 +7,22 @@ from datetime import datetime, timedelta, timezone
 import json
 
 ENTITY_IDS = [
-    "sensor.tempniiskuslauaall_temperature",
-    "sensor.tempniiskuslauaall_humidity",
-    "sensor.ohksoojus_power",
-    "sensor.indoor_absolute_humidity",
-    "sensor.ohukuivati_power"
+    # Power sensors
+    "sensor.ohksoojus_power",                 # heat pump power
+    "sensor.0xa4c138cdc6eff777_power",        # boiler power
+    "sensor.ohukuivati_power",                # air drier power
+
+    # Humidity (absolute and relative)
+    "sensor.abshumidkuu2_absolute_humidity", # living room absolute humidity
+    "sensor.tempniiskuslauaall_humidity",    # living room relative humidity
+    "sensor.indoor_absolute_humidity",       # wc absolute humidity
+
+    # Temperatures
+    "sensor.tempniiskuslauaall_temperature", # living room temperature
+    "sensor.indoor_outdoor_meter_3866",      # wc temperature
+
+    # Voltage sensors
+    "sensor.0xa4c138cdc6eff777_voltage"     # boiler voltage    
 ]
 
 def create_bronze_raw_table():
@@ -109,7 +120,7 @@ def fetch_and_load_elering_price(**context):
     payload = resp.json()
 
     rec = payload["data"][0]                       # {'timestamp': 1761686100, 'price': 78.15}
-    ts_utc = datetime.utcfromtimestamp(rec["timestamp"])  # naive UTC
+    ts_utc = datetime.fromtimestamp(rec["timestamp"], tz=timezone.utc).replace(tzinfo=None)  # naive UTC
     price = float(rec["price"])
     ingestion_ts = datetime.utcnow()
 

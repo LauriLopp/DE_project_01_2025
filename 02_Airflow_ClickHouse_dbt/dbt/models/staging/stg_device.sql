@@ -8,4 +8,4 @@
 select
   row_number() over () as DeviceKey,
   *
-from {{ source('raw_data', 'device_data') }}
+from {{ source('bronze_iot_raw_data', 'bronze_device') }}

@@ -7,31 +7,27 @@
 -- Staging: clean electricity price data
 -- Requirements:
 -- 1) Meaningful column names
--- 2) Consistently use local time (Europe/Tallinn)
+-- 2) Consistently use local time (Europe/Tallinn) - already in bronze layer
 -- 3) Consistently use a DateTime column named `timestamp`
--- 4) Numeric values as floats (decimal comma -> dot), convert cents/kWh -> EUR/kWh
+-- 4) Numeric values as floats, convert EUR/MWh -> EUR/kWh
+-- 5) Aggregate to hourly averages if granularity is higher than hour
 
 WITH raw AS (
 	SELECT
-		/* Original headers are semicolon-separated CSV with localized names */
-		`Periood` AS period_raw,
-		`Börsihind senti/kWh (sisaldab käibemaksu)` AS price_with_vat_cents_raw,
-		`Börsihind senti/kWh (ei sisalda käibemaksu)` AS price_without_vat_cents_raw
-	FROM {{ source('raw_data', 'np_tunnihinnad') }}
-), typed AS (
+		toTimeZone(ts_utc, 'Europe/Tallinn') AS timestamp_raw,
+		price_per_mwh AS price_eur_per_mwh
+	FROM {{ source('bronze_iot_raw_data', 'bronze_elering_price') }}
+), aggregated AS (
 	SELECT
-		/* Parse dd.MM.yyyy HH:mm as local time (no shift) and keep type as DateTime('Europe/Tallinn') */
-		CAST(parseDateTimeBestEffortOrNull(period_raw, 'Europe/Tallinn') AS DateTime('Europe/Tallinn')) AS timestamp,
-		/* Convert decimal comma to dot and cast to float (values are cents/kWh) */
-		price_with_vat_cents_raw  AS price_with_vat_cents,
-		price_without_vat_cents_raw  AS price_without_vat_cents
+		toStartOfHour(timestamp_raw) AS timestamp,
+		avg(price_eur_per_mwh) AS avg_price_eur_per_mwh
 	FROM raw
+	GROUP BY toStartOfHour(timestamp_raw)
 )
 SELECT
 	row_number() over () as PriceKey,
 	timestamp,
-	/* Convert cents -> EUR per kWh */
-	price_with_vat_cents / 100.0       AS price_eur_with_vat,
-	price_without_vat_cents / 100.0    AS price_eur_without_vat
-FROM typed
+	/* Convert EUR/MWh -> EUR/kWh */
+	avg_price_eur_per_mwh / 1000.0 AS price_eur_per_kwh,
+FROM aggregated
 WHERE timestamp IS NOT NULL
