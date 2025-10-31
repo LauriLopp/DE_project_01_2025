@@ -1,12 +1,12 @@
-name: clickhouse_dbt_demo
+name: ac_enery_usage
 version: "1.0.0"
-profile: clickhouse_dbt_demo  # must match the top key in profiles.yml
+profile: ac_enery_usage  # must match the top key in profiles.yml
 model-paths: ["models"]
 target-path: "target"
 clean-targets: ["target"]
 
 models:
-  clickhouse_dbt_demo:
+  ac_enery_usage:
     +materialized: table
     staging:
       +schema: staging  # Place staging models in a separate database (schema) "staging"

@@ -1,4 +1,4 @@
-clickhouse_dbt_demo:     # must match "profile" in dbt_project.yml
+ac_enery_usage:     # must match "profile" in dbt_project.yml
   target: dev
   outputs:
     dev:
