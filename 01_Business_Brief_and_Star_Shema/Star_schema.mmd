@@ -45,22 +45,26 @@ erDiagram
         int TimeKey FK "NOT NULL"
         int DeviceKey FK "NOT NULL"
         int LocationKey FK "NOT NULL"
+        float ElectricityPrice "CHECK (>=0)"
         float ASHP_Power "CHECK (>=0)"
-        float ElectricityPrice
+        float Boiler_Power "CHECK (>=0)"
+        float Air_Drier_Power "CHECK (>=0)"
+        float Boiler_Voltage "CHECK (>=0)"
         float IndoorTemp
         float IndoorHumidityPerc "CHECK (0<=value<=100)"
         float IndoorHumidityAbs
-        float IndoorAir_pm25 "CHECK (>=0)"
-        float IndoorAir_pm10 "CHECK (>=0)"
+        float WC_HumidityAbs
+        float WC_Temp
         float OutdoorTemp
+        float DewPoint
         float OutdoorHumidityPerc "CHECK (0<=value<=100)"
-        float AirPressure "CHECK (>=800 AND <=1100)"
-        float WindSpeed "CHECK (>=0)"
-        float WindDir "CHECK (0<=value<360)"
-        float Precipitation "CHECK (>=0)"
+        float CloudCoverage "CHECK (0<=value<=100)"
         float UV_index "CHECK (>=0)"
-        float Illumination "CHECK (>=0)"
-        float Irradiation "CHECK (>=0)"
+        float AirPressure_mmHg "CHECK (>=600 AND <=800)"
+        float WindDir "CHECK (0<=value<360)"
+        float WindGustSpeed_ms "CHECK (>=0)"
+        float WindSpeed_ms "CHECK (>=0)"
+        string WeatherCondition
     }
 
     %%====================
