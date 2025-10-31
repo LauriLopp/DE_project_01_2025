@@ -28,3 +28,17 @@ pgdata/
 .env.local
 connections.json
 data/connections.json
+# GitHub config (actions, templates)
+/.github/
+
+# Project-specific ignores
+/01_Business_Brief_and_Star_Shema/P1_feedbck.pdf
+/01_Business_Brief_and_Star_Shema/project1_description.pdf
+/01_Business_Brief_and_Star_Shema/Star_schema.svg
+/02_Airflow_ClickHouse_dbt/dbt/target/
+/02_Airflow_ClickHouse_dbt/dbt/.user.yml
+/02_Airflow_ClickHouse_dbt/project2_instructions.pdf
+/dynamic_TODOs.txt
+
+# Ignore exploration notebook (large/volatile)
+/01_Business_Brief_and_Star_Shema/iot_data_exploration.ipynb
