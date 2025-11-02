@@ -8,8 +8,13 @@ import os
 import json
 
 DBT_PROJECT_DIR = "/opt/airflow/dbt"
+# Route dbt logs and target to /tmp to avoid bind-mount permission issues on Windows
+DBT_LOG_PATH = "/tmp/dbt-logs"
+DBT_TARGET_PATH = "/tmp/dbt-target"
 DBT_ENV = {
     "DBT_PROFILES_DIR": DBT_PROJECT_DIR,
+    "DBT_LOG_PATH": DBT_LOG_PATH,
+    "DBT_TARGET_PATH": DBT_TARGET_PATH,
     "PATH": f"/home/airflow/.local/bin:{os.environ.get('PATH', '')}",
 }
 
@@ -245,35 +250,35 @@ with DAG(
     # dbt tasks to materialize bronze -> marts layers automatically
     task_dbt_debug = BashOperator(
         task_id="dbt_debug",
-        bash_command=f"cd {DBT_PROJECT_DIR} && dbt debug",
+        bash_command=f"mkdir -p {DBT_LOG_PATH} {DBT_TARGET_PATH} && cd {DBT_PROJECT_DIR} && dbt debug",
         do_xcom_push=False,
         env=DBT_ENV,
     )
 
     task_dbt_deps = BashOperator(
         task_id="dbt_deps",
-        bash_command=f"cd {DBT_PROJECT_DIR} && dbt deps",
+        bash_command=f"mkdir -p {DBT_LOG_PATH} {DBT_TARGET_PATH} && cd {DBT_PROJECT_DIR} && dbt deps",
         do_xcom_push=False,
         env=DBT_ENV,
     )
 
     task_dbt_seed = BashOperator(
         task_id="dbt_seed",
-        bash_command=f"cd {DBT_PROJECT_DIR} && dbt seed",
+        bash_command=f"mkdir -p {DBT_LOG_PATH} {DBT_TARGET_PATH} && cd {DBT_PROJECT_DIR} && dbt seed",
         do_xcom_push=False,
         env=DBT_ENV,
     )
 
     task_dbt_run = BashOperator(
         task_id="dbt_run",
-        bash_command=f"cd {DBT_PROJECT_DIR} && dbt run",
+        bash_command=f"mkdir -p {DBT_LOG_PATH} {DBT_TARGET_PATH} && cd {DBT_PROJECT_DIR} && dbt run",
         do_xcom_push=False,
         env=DBT_ENV,
     )
 
     task_dbt_test = BashOperator(
         task_id="dbt_test",
-        bash_command=f"cd {DBT_PROJECT_DIR} && dbt test",
+        bash_command=f"mkdir -p {DBT_LOG_PATH} {DBT_TARGET_PATH} && cd {DBT_PROJECT_DIR} && dbt test",
         do_xcom_push=False,
         env=DBT_ENV,
     )
