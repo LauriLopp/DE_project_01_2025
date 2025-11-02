@@ -5,12 +5,17 @@ The goal is to orchestrate data ingestion, transformation, and storage for the a
 
 ---
 
-## Overview
+## Overview - how to run the project (setup instructions, environment variables, dependencies)
 
 ---
 
-## 🧱 Components
+## 🧱 Screenshots or visuals of Airflow and dbt DAGs
 
+## DAG listing screenshot
+![dag_listing](dag_listing.png)
+
+## DAG details screenshot
+![dag_details](dag_details.png)
 
 ---
 
@@ -20,7 +25,7 @@ The goal is to orchestrate data ingestion, transformation, and storage for the a
 
 We’re grouping outdoor temperatures into 5°C bins (like -10 to -5, -5 to 0, etc.) and computing:
 
-- The average ASHP power within each temperature range  
+- The average ASHP (Airsource Head Pump) power within each temperature range  
 - The number of data points (hours) in each bin  
 
 ```sql
