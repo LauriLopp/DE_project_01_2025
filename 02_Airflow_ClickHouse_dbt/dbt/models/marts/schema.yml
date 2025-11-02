@@ -21,9 +21,8 @@ models:
         description: "Minimum power (>=0)"
         tests:
           - expression_is_true_clickhouse:
-              arguments:
-                column_name: MinPower
-                expression: "MinPower >= 0"
+              column_name: MinPower
+              expression: "MinPower >= 0"
       - name: InstallationDate
         description: "Installation date"
         tests:
@@ -59,9 +58,8 @@ models:
         description: "End of validity (default '9999-12-31')"
         tests:
           - expression_is_true_clickhouse:
-              arguments:
-                column_name: ValidTo
-                expression: "ValidTo >= ValidFrom"
+              column_name: ValidTo
+              expression: "ValidTo >= ValidFrom"
 
   - name: dim_time
     description: "Dimension table for time (hour grain)"
@@ -79,65 +77,56 @@ models:
         description: "Year"
         tests:
           - expression_is_true_clickhouse:
-              arguments:
-                column_name: Year
-                expression: "Year >= 2000"
+              column_name: Year
+              expression: "Year >= 2000"
       - name: Month
         description: "Month"
         tests:
           - expression_is_true_clickhouse:
-              arguments:
-                column_name: Month
-                expression: "Month BETWEEN 1 AND 12"
+              column_name: Month
+              expression: "Month BETWEEN 1 AND 12"
       - name: Day
         description: "Day of month"
         tests:
           - expression_is_true_clickhouse:
-              arguments:
-                column_name: Day
-                expression: "Day BETWEEN 1 AND 31"
+              column_name: Day
+              expression: "Day BETWEEN 1 AND 31"
       - name: DayOfWeek
         description: "Day of week"
         tests:
           - expression_is_true_clickhouse:
-              arguments:
-                column_name: DayOfWeek
-                expression: "DayOfWeek BETWEEN 1 AND 7"
+              column_name: DayOfWeek
+              expression: "DayOfWeek BETWEEN 1 AND 7"
       - name: HourOfDay
         description: "Hour of day"
         tests:
           - expression_is_true_clickhouse:
-              arguments:
-                column_name: HourOfDay
-                expression: "HourOfDay BETWEEN 0 AND 23"
+              column_name: HourOfDay
+              expression: "HourOfDay BETWEEN 0 AND 23"
       - name: Season
         description: "Season name"
         tests:
           - expression_is_true_clickhouse:
-              arguments:
-                column_name: Season
-                expression: "Season IN ('Winter','Spring','Summer','Autumn')"
+              column_name: Season
+              expression: "Season IN ('Winter','Spring','Summer','Autumn')"
       - name: IsHoliday
         description: "Holiday flag"
         tests:
           - expression_is_true_clickhouse:
-              arguments:
-                column_name: IsHoliday
-                expression: "IsHoliday IN (0,1)"
+              column_name: IsHoliday
+              expression: "IsHoliday IN (0,1)"
       - name: IsWeekend
         description: "Weekend flag"
         tests:
           - expression_is_true_clickhouse:
-              arguments:
-                column_name: IsWeekend
-                expression: "IsWeekend IN (0,1)"
+              column_name: IsWeekend
+              expression: "IsWeekend IN (0,1)"
       - name: IsPeakHour
         description: "Peak hour flag"
         tests:
           - expression_is_true_clickhouse:
-              arguments:
-                column_name: IsPeakHour
-                expression: "IsPeakHour IN (0,1)"
+              column_name: IsPeakHour
+              expression: "IsPeakHour IN (0,1)"
 
   - name: fact_heating_energy_usage
     description: "Heating energy usage facts for devices and locations"
@@ -152,25 +141,22 @@ models:
         tests:
           - not_null
           - relationships:
-              arguments:
-                to: ref('dim_time')
-                field: TimeKey
+              to: ref('dim_time')
+              field: TimeKey
       - name: DeviceKey
         description: "Foreign key to device dimension"
         tests:
           - not_null
           - relationships:
-              arguments:
-                to: ref('dim_device')
-                field: DeviceKey
+              to: ref('dim_device')
+              field: DeviceKey
       - name: LocationKey
         description: "Foreign key to location dimension"
         tests:
           - not_null
           - relationships:
-              arguments:
-                to: ref('dim_location')
-                field: LocationKey
+              to: ref('dim_location')
+              field: LocationKey
       - name: ElectricityPrice
         description: "Electricity price at the time"
       - name: ASHP_Power
@@ -215,44 +201,36 @@ models:
     tests:
       # --- Custom data validity tests ---
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: ASHP_Power
-            expression: "ASHP_Power >= 0"
+          column_name: ASHP_Power
+          expression: "ASHP_Power >= 0"
 
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: IndoorHumidityPerc
-            expression: "IndoorHumidityPerc BETWEEN 0 AND 100"
+          column_name: IndoorHumidityPerc
+          expression: "IndoorHumidityPerc BETWEEN 0 AND 100"
 
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: OutdoorHumidityPerc
-            expression: "OutdoorHumidityPerc BETWEEN 0 AND 100"
+          column_name: OutdoorHumidityPerc
+          expression: "OutdoorHumidityPerc BETWEEN 0 AND 100"
 
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: UV_Index
-            expression: "UV_Index >= 0"
+          column_name: UV_Index
+          expression: "UV_Index >= 0"
 
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: AirPressure_mmHg
-            expression: "AirPressure_mmHg BETWEEN 600 AND 800"
+          column_name: AirPressure_mmHg
+          expression: "AirPressure_mmHg BETWEEN 600 AND 800"
 
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: WindDir
-            expression: "WindDir BETWEEN 0 AND 360"
+          column_name: WindDir
+          expression: "WindDir BETWEEN 0 AND 360"
 
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: WindSpeed_ms
-            expression: "WindSpeed_ms >= 0"
+          column_name: WindSpeed_ms
+          expression: "WindSpeed_ms >= 0"
 
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: WindGustSpeed_ms
-            expression: "WindGustSpeed_ms >= 0"
+          column_name: WindGustSpeed_ms
+          expression: "WindGustSpeed_ms >= 0"
 
       # --- Basic null checks ---
       - not_null:
