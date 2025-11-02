@@ -259,10 +259,17 @@ with DAG(
         env={"DBT_PROFILES_DIR": "/opt/airflow/dbt"},
     )
 
+    task_dbt_test = BashOperator(
+        task_id="dbt_test",
+        bash_command=f"cd /opt/airflow/dbt && {dbt_cli} test",
+        do_xcom_push=False,
+        env={"DBT_PROFILES_DIR": "/opt/airflow/dbt"},
+    )
+
     # Define dependencies: each stream is independent, dbt runs after ingestion
     task_setup_iot >> task_fetch_iot
     task_setup_price >> task_fetch_price
     task_setup_weather >> task_fetch_weather
     [task_fetch_iot, task_fetch_price, task_fetch_weather, task_create_static_tables] >> task_dbt_debug
-    task_dbt_debug >> task_dbt_seed >> task_dbt_run
+    task_dbt_debug >> task_dbt_seed >> task_dbt_run >> task_dbt_test
     
