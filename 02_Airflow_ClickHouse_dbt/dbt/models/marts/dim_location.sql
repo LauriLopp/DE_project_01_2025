@@ -1,21 +1,7 @@
-{{
-  config(
-    materialized='table'
-  )
-}}
-
--- Gold layer: DIM_LOCATION
--- This dimension table is derived from the stg_location staging table.
--- It includes the following columns:
---   - LocationKey: Primary key
---   - DeviceLocation: Location of the device (not null)
---   - ClosestWeatherStation: Closest weather station (not null)
---   - PricingRegion: Pricing region (not null)
---   - ValidFrom: Start date of validity (not null)
---   - ValidTo: End date of validity (default '9999-12-31')
+{{ config(materialized='table') }}
 
 SELECT
-  row_number() OVER () AS LocationKey, -- Primary key
+  row_number() OVER () AS LocationKey,
   DeviceLocation,
   ClosestWeatherStation,
   PricingRegion,

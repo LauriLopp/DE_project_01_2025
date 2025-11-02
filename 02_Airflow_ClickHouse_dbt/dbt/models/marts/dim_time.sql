@@ -1,8 +1,4 @@
-{{
-  config(
-    materialized='table'
-  )
-}}
+{{ config(materialized='table') }}
 
 -- Gold-layer: DIM_TIME (sparse)
 -- Build only the hours actually used across staging sources (IoT, weather, price)

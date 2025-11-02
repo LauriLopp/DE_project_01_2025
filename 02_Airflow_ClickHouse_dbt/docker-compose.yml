@@ -115,6 +115,7 @@ services:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./data:/opt/airflow/data
+      - ./dbt:/opt/airflow/dbt
     depends_on:
       - airflow-init
       - clickhouse-server
@@ -141,6 +142,7 @@ services:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./data:/opt/airflow/data
+      - ./dbt:/opt/airflow/dbt
     depends_on:
       - airflow-init
       - clickhouse-server

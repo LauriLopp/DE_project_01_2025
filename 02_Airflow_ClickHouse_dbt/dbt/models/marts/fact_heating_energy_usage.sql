@@ -73,9 +73,11 @@ FROM base AS b
 CROSS JOIN {{ ref('dim_device') }} AS d
 CROSS JOIN {{ ref('dim_location') }} AS l
 WHERE
-  toDate(b.hour_start)
-    BETWEEN toDate(COALESCE(d.InstallationDate, toDate('2000-01-01')))
-        AND toDate(COALESCE(d.ValidTo,          toDate('9999-12-31')))
-  AND toDate(b.hour_start)
-    BETWEEN toDate(COALESCE(l.ValidFrom, toDate('2000-01-01')))
-        AND toDate(COALESCE(l.ValidTo,   toDate('9999-12-31')))
+    -- Device validity window
+    toDate(b.hour_start)
+        BETWEEN toDate(COALESCE(d.InstallationDate, toDate('2000-01-01')))
+            AND toDate(COALESCE(d.ValidTo, toDate('9999-12-31')))
+    -- Location validity window
+    AND toDate(b.hour_start)
+        BETWEEN toDate(COALESCE(l.ValidFrom, toDate('2000-01-01')))
+            AND toDate(COALESCE(l.ValidTo,   toDate('9999-12-31')))
