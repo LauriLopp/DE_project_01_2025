@@ -33,8 +33,8 @@ WITH base AS (
         w.wind_speed_ms               AS WindSpeed_ms,
         w.condition_state             AS WeatherCondition
     FROM {{ ref('stg_iot_data') }} AS i
-    JOIN {{ ref('dim_time') }} AS t
-      ON i.hour_start = t.FullDate
+      JOIN {{ ref('dim_time') }} AS t
+        ON i.hour_start = toDateTime(t.FullDate, 'Europe/Tallinn') + toIntervalHour(t.HourOfDay)
     LEFT JOIN {{ ref('stg_weather_data') }} AS w
       ON i.hour_start = toStartOfHour(w.timestamp)
     LEFT JOIN {{ ref('stg_price_data') }} AS p
@@ -43,11 +43,12 @@ WITH base AS (
 
 -- ClickHouse-safe join logic
 SELECT
-    row_number() OVER ()                       AS FactKey,
+  row_number() OVER (
+    ORDER BY b.TimeKey, d.DeviceKey, l.LocationKey
+  )                                          AS FactKey,
     b.TimeKey,
     d.DeviceKey,
     l.LocationKey,
-    b.hour_start,
     b.ElectricityPrice,
     b.ASHP_Power,
     b.Boiler_Power,
