@@ -45,7 +45,7 @@ ORDER BY bin_start;
 ```
 
 We haven’t run this DAG for long enough to show all temperature bins, though the 5°C–10°C range already appears with average power data.
-
+![query 1](query%201.png)
 ---
 
 ## Query 2 — ML-Ready Energy Dataset
@@ -58,7 +58,7 @@ It:
 - Includes indoor/outdoor temps and temperature difference (`TempDelta`)  
 - Converts power (W) to energy per hour (kWh)  
 - Filters only realistic indoor temps (15–25°C)  
-
+![query 2](query%202.png)
 ```sql
 SELECT
   dt.FullDate,
@@ -89,7 +89,7 @@ Calculates how much power is needed per °C temperature difference between insid
 - **Numerator:** total power used  
 - **Denominator:** total temperature difference (ΔT = Indoor − Outdoor)  
 - **Result:** average watts per °C  
-
+![query 3](query%203.png)
 ```sql
 SELECT
   sum(f.ASHP_Power) / nullIf(sum(f.IndoorTemp - f.OutdoorTemp), 0) AS watts_per_C,
@@ -115,7 +115,7 @@ Groups data into 0.05 €/kWh price ranges to compute:
 - Total energy (kWh)  
 - Total cost (€)  
 - Number of hours in each bin  
-
+![query 4](query%204.png)
 ```sql
 SELECT
   0.05 * intDiv(toInt32(f.ElectricityPrice / 0.05), 1) AS price_bin_eur,
@@ -144,7 +144,7 @@ Generates a detailed hourly dataset for visualizing cost behavior.
 - Flags peak hours (07:00–22:00)  
 - Flags weekends  
 - Calculates power, energy, and cost per hour  
-
+![query 5](query%205.png)
 ```sql
 SELECT
   dt.FullDate,
@@ -172,7 +172,7 @@ Compares energy use and cost between:
 
 - Weekdays vs. Weekends  
 - Peak vs. Off-peak hours  
-
+![query 6](query%206.png)
 ```sql
 SELECT
   multiIf(dt.DayOfWeek IN (6,7), 'Weekend', 'Weekday') AS day_type,
@@ -197,7 +197,7 @@ In the current dataset, all 23 hours of recorded consumption were during off-pea
 ## Query 7 — Energy by Month and Temperature Range
 
 Groups energy usage by **month** and **5°C temperature ranges** to examine seasonal variations.
-
+![query 7](query%207.png)
 ```sql
 WITH bucketed AS (
   SELECT
@@ -235,7 +235,7 @@ Shows how many hours per day the ASHP operated below its **minimum rated power**
 - System idling  
 - Inefficiency  
 - Underperformance  
-
+![query 8](query%208.png)
 ```sql
 SELECT
   dt.Year,
