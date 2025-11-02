@@ -17,6 +17,9 @@ The goal is to orchestrate data ingestion, transformation, and storage for the a
 ## DAG details screenshot
 ![dag_details](dag_details.png)
 
+## DAG continuous ingestion pipeline
+![continuous_ingestion_pipeline](continuous_ingestion_pipeline.png)
+
 ---
 
 ## 🗂️ Demo queries and explanations
@@ -48,8 +51,8 @@ FROM bucketed
 GROUP BY bin_start
 ORDER BY bin_start;
 ```
-
 We haven’t run this DAG for long enough to show all temperature bins, though the 5°C–10°C range already appears with average power data.
+
 ![query 1](query%201.png)
 ---
 
