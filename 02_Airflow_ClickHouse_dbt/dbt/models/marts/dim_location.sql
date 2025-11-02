@@ -19,9 +19,9 @@ SELECT
   DeviceLocation,
   ClosestWeatherStation,
   PricingRegion,
-  ValidFrom,
-  COALESCE(ValidTo, toDate('9999-12-31')) AS ValidTo
+  COALESCE(ValidFrom, toDate('2000-01-01')) AS ValidFrom,
+  COALESCE(ValidTo,   toDate('9999-12-31')) AS ValidTo
 FROM {{ ref('stg_location') }}
-WHERE DeviceLocation IS NOT NULL 
-  AND ClosestWeatherStation IS NOT NULL 
+WHERE DeviceLocation IS NOT NULL
+  AND ClosestWeatherStation IS NOT NULL
   AND PricingRegion IS NOT NULL

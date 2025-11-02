@@ -1,4 +1,4 @@
-ac_enery_usage:     # must match "profile" in dbt_project.yml
+ac_energy_usage:     # must match "profile" in dbt_project.yml
   target: dev
   outputs:
     dev:

@@ -1,13 +1,16 @@
-name: ac_enery_usage
+name: ac_energy_usage
 version: "1.0.0"
-profile: ac_enery_usage  # must match the top key in profiles.yml
+profile: ac_energy_usage  # must match the top key in profiles.yml
+
 model-paths: ["models"]
 target-path: "target"
 clean-targets: ["target"]
 
 models:
-  ac_enery_usage:
+  ac_energy_usage:
+    # Default materialization for all models
     +materialized: table
+
+    # Staging models (keep in same schema = default)
     staging:
-      +schema: staging  # Place staging models in a separate database (schema) "staging"
       +materialized: view
