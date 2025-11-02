@@ -58,44 +58,36 @@ models:
     tests:
       # --- Custom data validity tests ---
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: ASHP_Power
-            expression: "ASHP_Power >= 0"
+          column_name: ASHP_Power
+          expression: "ASHP_Power >= 0"
 
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: IndoorHumidityPerc
-            expression: "IndoorHumidityPerc BETWEEN 0 AND 100"
+          column_name: IndoorHumidityPerc
+          expression: "IndoorHumidityPerc BETWEEN 0 AND 100"
 
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: OutdoorHumidityPerc
-            expression: "OutdoorHumidityPerc BETWEEN 0 AND 100"
+          column_name: OutdoorHumidityPerc
+          expression: "OutdoorHumidityPerc BETWEEN 0 AND 100"
 
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: UV_Index
-            expression: "UV_Index >= 0"
+          column_name: UV_Index
+          expression: "UV_Index >= 0"
 
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: AirPressure_mmHg
-            expression: "AirPressure_mmHg BETWEEN 600 AND 800"
+          column_name: AirPressure_mmHg
+          expression: "AirPressure_mmHg BETWEEN 600 AND 800"
 
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: WindDir
-            expression: "WindDir BETWEEN 0 AND 360"
+          column_name: WindDir
+          expression: "WindDir BETWEEN 0 AND 360"
 
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: WindSpeed_ms
-            expression: "WindSpeed_ms >= 0"
+          column_name: WindSpeed_ms
+          expression: "WindSpeed_ms >= 0"
 
       - expression_is_true_clickhouse:
-          arguments:
-            column_name: WindGustSpeed_ms
-            expression: "WindGustSpeed_ms >= 0"
+          column_name: WindGustSpeed_ms
+          expression: "WindGustSpeed_ms >= 0"
 
       # --- Basic null checks ---
       - not_null:

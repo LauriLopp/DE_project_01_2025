@@ -1,4 +1,5 @@
 from airflow import DAG
+from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 from airflow_clickhouse_plugin.hooks.clickhouse import ClickHouseHook
 from airflow.providers.http.hooks.http import HttpHook
@@ -234,9 +235,34 @@ with DAG(
     task_fetch_price = PythonOperator(task_id="fetch_elering_history", python_callable=fetch_elering_history)
     task_fetch_weather = PythonOperator(task_id="fetch_weather_history", python_callable=fetch_weather_history)
 
-    # Define dependencies: each stream is independent
+    # dbt tasks to materialize bronze -> marts layers automatically
+    dbt_cli = "/home/airflow/.local/bin/dbt"
+
+    task_dbt_debug = BashOperator(
+        task_id="dbt_debug",
+        bash_command=f"cd /opt/airflow/dbt && {dbt_cli} debug",
+        do_xcom_push=False,
+        env={"DBT_PROFILES_DIR": "/opt/airflow/dbt"},
+    )
+
+    task_dbt_seed = BashOperator(
+        task_id="dbt_seed",
+        bash_command=f"cd /opt/airflow/dbt && {dbt_cli} seed",
+        do_xcom_push=False,
+        env={"DBT_PROFILES_DIR": "/opt/airflow/dbt"},
+    )
+
+    task_dbt_run = BashOperator(
+        task_id="dbt_run",
+        bash_command=f"cd /opt/airflow/dbt && {dbt_cli} run",
+        do_xcom_push=False,
+        env={"DBT_PROFILES_DIR": "/opt/airflow/dbt"},
+    )
+
+    # Define dependencies: each stream is independent, dbt runs after ingestion
     task_setup_iot >> task_fetch_iot
     task_setup_price >> task_fetch_price
     task_setup_weather >> task_fetch_weather
-    task_create_static_tables
+    [task_fetch_iot, task_fetch_price, task_fetch_weather, task_create_static_tables] >> task_dbt_debug
+    task_dbt_debug >> task_dbt_seed >> task_dbt_run
     
