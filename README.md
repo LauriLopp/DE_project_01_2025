@@ -17,6 +17,31 @@ The goal of this project is to plan and conduct working data pipeline from data 
 
 ---
 
+## Project Summary
+
+This project project has currently two main parts, that are created to serve as both - individual project and part of overall, greater project.
+
+### Part 1: Data Warehouse Design and Exploration
+
+**(Folder: `01_Business_Brief_and_Star_Shema/`)**
+
+This initial phase focused on business analysis, data exploration, and architectural design. Key activities included:
+- **Exploring Raw Data**: Analyzing CSV files containing IoT sensor readings, weather data, and electricity prices to understand their structure and content.
+- **Designing a Star Schema**: Modeling a robust data warehouse schema to support analytical queries. This involved defining fact and dimension tables to track energy usage against various environmental and market factors.
+- **Writing Demo Queries**: Crafting initial SQL queries to validate the schema design and demonstrate its analytical capabilities.
+
+### Part 2: Automated ELT Pipeline with Airflow, dbt, and ClickHouse
+
+**(Folder: `02_Airflow_ClickHouse_dbt/`)**
+
+The second phase focused on implementing and automating the designed data warehouse. This involved building a modern, containerized ELT (Extract, Load, Transform) pipeline. Key activities included:
+- **Containerization**: Using Docker and Docker Compose to define and manage all services, including Airflow, ClickHouse, and dbt.
+- **Orchestration**: Building an Airflow DAG to automate the entire workflow, from ingesting raw data from APIs to triggering transformations.
+- **Transformation**: Developing a dbt project to transform raw data into a clean, analytics-ready format, populating the staging (Silver) and mart (Gold) layers of the data warehouse.
+- **Documentation**: Creating detailed setup and run instructions to ensure the project is reproducible. For a full guide on running the pipeline, see the [Part 2 README](./02_Airflow_ClickHouse_dbt/README.md).
+
+---
+
 ## Project structure:
 ```
 DE_project_2025/
