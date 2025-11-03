@@ -2,4 +2,4 @@ DeviceLocation,ClosestWeatherStation,PricingRegion,ValidFrom,ValidTo
 Tallinn,Tallinn-Harku,EE_North,2023-01-01,2023-06-30
 Tartu,Tartu-Toravere,EE_South,2023-07-01,2024-05-31
 Tartu,Tartu-Toravere,EE_South,2024-06-01,2025-06-30
-Narva,Johvi,EE_East,2025-07-01,9999-12-31
+Tartu,Tartu-Toravere,EE_South,2025-07-01,9999-12-31

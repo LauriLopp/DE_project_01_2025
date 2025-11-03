@@ -26,6 +26,60 @@ The goal is to orchestrate data ingestion, transformation, and storage for the a
 
 ---
 
+## 📁 Project Structure
+
+```
+02_Airflow_ClickHouse_dbt/
+├── .env.local                          # (User-provided) Contains secret tokens and credentials
+├── clickhouse-init/                    # Scripts to initialize ClickHouse on first run
+├── cloudbeaver-init/                   # Pre-configured connection settings for CloudBeaver UI
+├── config/                             # ClickHouse user and profile configurations
+├── dags/
+│   └── home_assistant_continuous_raw.py  # The main Airflow DAG orchestrating the pipeline
+├── data/                                 # Mounted volume for data exchange (not used in final version)
+├── dbt/
+│   ├── logs/                           # (Generated) dbt run and debug logs
+│   ├── macros/
+│   │   └── expression_is_true_clickhouse.sql # Custom generic test for ClickHouse
+│   ├── models/
+│   │   ├── marts/                      # Gold layer: Dimensional and fact models
+│   │   │   ├── dim_device.sql
+│   │   │   ├── dim_location.sql
+│   │   │   ├── dim_time.sql
+│   │   │   ├── fact_heating_energy_usage.sql
+│   │   │   └── schema.yml              # Defines tests and descriptions for the mart layer
+│   │   ├── staging/                    # Silver layer: Cleaned and standardized views
+│   │   │   ├── stg_device.sql
+│   │   │   ├── stg_iot_data.sql
+│   │   │   ├── stg_location.sql
+│   │   │   ├── stg_price_data.sql
+│   │   │   └── stg_weather_data.sql
+│   │   └── sources.yml                 # Defines Bronze layer sources for dbt
+│   ├── seeds/
+│   │   └── estonian_holidays.csv       # Seed data for public holidays
+│   ├── .user.yml                       # (Generated) dbt user configuration
+│   ├── dbt_project.yml                 # Main dbt project configuration file
+│   ├── package-lock.yml                # Lockfile for dbt package versions
+│   ├── packages.yml                    # Declares external dbt package dependencies
+│   ├── profiles.yml                    # Database connection profiles for dbt
+│   └── selectors.yml                   # Definitions for selecting subsets of models
+├── device_location_data/               # Static CSVs mounted into ClickHouse for seeding
+│   ├── device_data.csv
+│   └── location_data.csv
+├── logs/                                 # (Generated) Airflow task logs
+├── docker-compose.yml                  # Defines and configures all services (Airflow, dbt, ClickHouse, etc.)
+├── Dockerfile                          # Docker build instructions for the standalone dbt service
+├── Dockerfile.airflow                  # Docker build instructions for the Airflow services
+├── README.md                           # This file: Main documentation for Part 2
+├── continuous_ingestion_pipeline.png   # Screenshot of the Airflow DAG graph view
+├── dag_details.png                     # Screenshot of the Airflow DAG details
+├── dag_listing.png                     # Screenshot of the Airflow DAGs list
+├── query 1.png ... query 8.png         # Screenshots of demo query results
+└── Star_schema_02.png                  # Image of the final star schema
+```
+
+---
+
 ## 🧱 Screenshots or visuals of Airflow and dbt DAGs
 
 ## DAG listing screenshot
