@@ -10,6 +10,7 @@ The goal is to orchestrate data ingestion, transformation, and storage for the a
 
 1. **Install [Tailscale](https://tailscale.com/)**: Sign in to Tailscale with the Google account or invite link provided by the team.
 2. **Obtain secrets**: Get the shared `.env.local` file from the team. Place it alongside `docker-compose.yml` inside `02_Airflow_ClickHouse_dbt/` before starting any containers.
+The file can be found from [Google Drive](https://drive.google.com/file/d/1_C8yHceYJq4tOPXwc69b1QlV-fdz3qt6/view?usp=sharing) and is directly available to course lectors. The peer graders and other interested parties must request access and **provide well explained reason** to obtain the access.
 3. **Clone or update the project**:
   - Fresh setup: `git clone https://github.com/LauriLopp/DE_project_2025.git`
   - Existing clone: `git pull` to fetch the latest changes.
