@@ -4,7 +4,19 @@ from airflow.operators.python import PythonOperator
 from airflow_clickhouse_plugin.hooks.clickhouse import ClickHouseHook
 from airflow.providers.http.hooks.http import HttpHook
 from datetime import datetime, timezone
+import os
 import json
+
+DBT_PROJECT_DIR = "/opt/airflow/dbt"
+# Route dbt logs and target to /tmp to avoid bind-mount permission issues on Windows
+DBT_LOG_PATH = "/tmp/dbt-logs"
+DBT_TARGET_PATH = "/tmp/dbt-target"
+DBT_ENV = {
+    "DBT_PROFILES_DIR": DBT_PROJECT_DIR,
+    "DBT_LOG_PATH": DBT_LOG_PATH,
+    "DBT_TARGET_PATH": DBT_TARGET_PATH,
+    "PATH": f"/home/airflow/.local/bin:{os.environ.get('PATH', '')}",
+}
 
 HA_IOT_ENTITY_IDS = [
     # Power sensors
@@ -236,34 +248,39 @@ with DAG(
     task_fetch_weather = PythonOperator(task_id="fetch_weather_history", python_callable=fetch_weather_history)
 
     # dbt tasks to materialize bronze -> marts layers automatically
-    dbt_cli = "/home/airflow/.local/bin/dbt"
-
     task_dbt_debug = BashOperator(
         task_id="dbt_debug",
-        bash_command=f"cd /opt/airflow/dbt && {dbt_cli} debug",
+        bash_command=f"mkdir -p {DBT_LOG_PATH} {DBT_TARGET_PATH} && cd {DBT_PROJECT_DIR} && dbt debug",
         do_xcom_push=False,
-        env={"DBT_PROFILES_DIR": "/opt/airflow/dbt"},
+        env=DBT_ENV,
+    )
+
+    task_dbt_deps = BashOperator(
+        task_id="dbt_deps",
+        bash_command=f"mkdir -p {DBT_LOG_PATH} {DBT_TARGET_PATH} && cd {DBT_PROJECT_DIR} && dbt deps",
+        do_xcom_push=False,
+        env=DBT_ENV,
     )
 
     task_dbt_seed = BashOperator(
         task_id="dbt_seed",
-        bash_command=f"cd /opt/airflow/dbt && {dbt_cli} seed",
+        bash_command=f"mkdir -p {DBT_LOG_PATH} {DBT_TARGET_PATH} && cd {DBT_PROJECT_DIR} && dbt seed",
         do_xcom_push=False,
-        env={"DBT_PROFILES_DIR": "/opt/airflow/dbt"},
+        env=DBT_ENV,
     )
 
     task_dbt_run = BashOperator(
         task_id="dbt_run",
-        bash_command=f"cd /opt/airflow/dbt && {dbt_cli} run",
+        bash_command=f"mkdir -p {DBT_LOG_PATH} {DBT_TARGET_PATH} && cd {DBT_PROJECT_DIR} && dbt run",
         do_xcom_push=False,
-        env={"DBT_PROFILES_DIR": "/opt/airflow/dbt"},
+        env=DBT_ENV,
     )
 
     task_dbt_test = BashOperator(
         task_id="dbt_test",
-        bash_command=f"cd /opt/airflow/dbt && {dbt_cli} test",
+        bash_command=f"mkdir -p {DBT_LOG_PATH} {DBT_TARGET_PATH} && cd {DBT_PROJECT_DIR} && dbt test",
         do_xcom_push=False,
-        env={"DBT_PROFILES_DIR": "/opt/airflow/dbt"},
+        env=DBT_ENV,
     )
 
     # Define dependencies: each stream is independent, dbt runs after ingestion
@@ -271,5 +288,5 @@ with DAG(
     task_setup_price >> task_fetch_price
     task_setup_weather >> task_fetch_weather
     [task_fetch_iot, task_fetch_price, task_fetch_weather, task_create_static_tables] >> task_dbt_debug
-    task_dbt_debug >> task_dbt_seed >> task_dbt_run >> task_dbt_test
+    task_dbt_debug >> task_dbt_deps >> task_dbt_seed >> task_dbt_run >> task_dbt_test
     

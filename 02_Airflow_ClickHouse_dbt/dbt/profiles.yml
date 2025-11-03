@@ -4,8 +4,11 @@ ac_energy_usage:     # must match "profile" in dbt_project.yml
     dev:
       type: clickhouse
       schema: default
+      database: default
       host: clickhouse-server
-      port: 8123
+      port: 9000
       user: airflow
       password: supersecret
       secure: false
+      driver: native
+      threads: 4

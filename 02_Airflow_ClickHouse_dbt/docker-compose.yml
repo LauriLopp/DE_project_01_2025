@@ -7,9 +7,9 @@ volumes:
 
 
 services:
-  # ==========================================================
+
   #  Airflow metadata database (Postgres)
-  # ==========================================================
+
   airflow-db:
     container_name: de_project2_airflow_db
     image: postgres:16.4
@@ -26,9 +26,8 @@ services:
       retries: 5
     restart: always
 
-  # ==========================================================
   #  ClickHouse Server (data warehouse)
-  # ==========================================================
+
   clickhouse-server:
     container_name: de_project2_clickhouse_server
     image: clickhouse/clickhouse-server:24.4
@@ -59,9 +58,8 @@ services:
       interval: 5s
       retries: 20
 
-  # ==========================================================
   #  ClickHouse Web UI (CloudBeaver)
-  # ==========================================================
+
   clickhouse-ui:
     container_name: de_project2_clickhouse-ui
     image: dbeaver/cloudbeaver:latest
@@ -91,9 +89,8 @@ services:
       - clickhouse-server
     restart: always
 
-  # ==========================================================
   #  Airflow Webserver
-  # ==========================================================
+
   airflow-webserver:
     image: apache/airflow:2.8.1
     build:
@@ -109,6 +106,8 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
       - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
       - AIRFLOW__CORE__FERNET_KEY=B34E7pmv18aZl4g6z105ChW7zHsZjsfmGMSvveDaTQ0=
+      - DBT_LOG_PATH=/tmp/dbt-logs
+      - DBT_TARGET_PATH=/tmp/dbt-target
     ports:
       - "8080:8080"
     volumes:
@@ -121,9 +120,8 @@ services:
       - clickhouse-server
     restart: always
 
-  # ==========================================================
   #  Airflow Scheduler
-  # ==========================================================
+
   airflow-scheduler:
     image: apache/airflow:2.8.1
     build:
@@ -138,6 +136,8 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@de_project2_airflow_db:5432/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
       - AIRFLOW__CORE__FERNET_KEY=B34E7pmv18aZl4g6z105ChW7zHsZjsfmGMSvveDaTQ0=
+      - DBT_LOG_PATH=/tmp/dbt-logs
+      - DBT_TARGET_PATH=/tmp/dbt-target
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
@@ -148,9 +148,8 @@ services:
       - clickhouse-server
     restart: always
 
-  # ==========================================================
   #  Airflow DB Initialization
-  # ==========================================================
+
   airflow-init:
     image: apache/airflow:2.8.1
     build:
@@ -195,9 +194,8 @@ services:
       - airflow-db
     restart: "no"
 
-  # ==========================================================
   #  DBT container (for transformations)
-  # ==========================================================
+
   dbt:
     build:
       context: .

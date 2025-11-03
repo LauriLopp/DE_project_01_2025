@@ -36,6 +36,7 @@ data/connections.json
 /01_Business_Brief_and_Star_Shema/project1_description.pdf
 /01_Business_Brief_and_Star_Shema/Star_schema.svg
 /02_Airflow_ClickHouse_dbt/dbt/target/
+/02_Airflow_ClickHouse_dbt/dbt/dbt_packages/
 /02_Airflow_ClickHouse_dbt/dbt/.user.yml
 /02_Airflow_ClickHouse_dbt/project2_instructions.pdf
 /dynamic_TODOs.txt
