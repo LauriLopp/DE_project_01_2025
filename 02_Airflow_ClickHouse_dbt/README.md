@@ -7,6 +7,22 @@ The goal is to orchestrate data ingestion, transformation, and storage for the a
 
 ## Overview - how to run the project (setup instructions, environment variables, dependencies)
 
+1. **Install [Tailscale](https://tailscale.com/)**: Sign in to Tailscale with the Google account or invite link provided by the team.
+2. **Obtain secrets**: Get the shared `.env.local` file from the team. Place it alongside `docker-compose.yml` inside `02_Airflow_ClickHouse_dbt/` before starting any containers.
+3. **Clone or update the project**:
+  - Fresh setup: `git clone https://github.com/LauriLopp/DE_project_2025.git`
+  - Existing clone: `git pull` to fetch the latest changes.
+4. **Change directory**: `cd DE_project_2025/02_Airflow_ClickHouse_dbt`
+5. **Start the stack**: `docker compose up --build -d`
+6. **Access Airflow**: open `http://localhost:8080`, log in with username `airflow` and password `airflow`.
+7. **Enable the pipeline**: turn on the `continuous_ingestion_pipeline` DAG and confirm the tasks progress to running state.
+8. **Access CloudBeaver UI**: open `http://localhost:8978`, click the gear icon (top right), log in with `cbadmin / CloudBeaver1`.
+9. **Create ClickHouse connection**:
+  - Click `+ New connection` → `ClickHouse`.
+  - Host `clickhouse-server`, Database `default`, Username `airflow`, Password `supersecret`.
+  - Optionally tick “Save credentials for all users with access”, then click **Test** → **Create**.
+10. **Verify data**: browse the ClickHouse connection; the `default` schema should list the bronze, staging, dimensional, and fact tables produced by the DAG.
+
 ---
 
 ## 🧱 Screenshots or visuals of Airflow and dbt DAGs
