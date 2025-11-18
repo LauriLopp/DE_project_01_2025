@@ -1,0 +1,24 @@
+
+    
+    
+    
+    create table `default`.`estonian_holidays` 
+   ("timestamp" Date,"name" String)
+    
+  engine = MergeTree()
+    
+      order by (tuple())
+    
+  ;
+    -- dbt seed --
+    
+  
+  
+
+  
+
+  
+
+
+;
+  

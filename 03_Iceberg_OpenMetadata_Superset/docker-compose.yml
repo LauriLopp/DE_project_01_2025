@@ -1,0 +1,211 @@
+# version: "3.9"
+
+volumes:
+  airflow-pgdata:
+  clickhouse-data:
+  cloudbeaver-data:
+
+
+services:
+
+  #  Airflow metadata database (Postgres)
+
+  airflow-db:
+    container_name: de_project2_airflow_db
+    image: postgres:16.4
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+      - AIRFLOW__CORE__FERNET_KEY=B34E7pmv18aZl4g6z105ChW7zHsZjsfmGMSvveDaTQ0=
+    volumes:
+      - airflow-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U airflow" ]
+      interval: 10s
+      retries: 5
+    restart: always
+
+  #  ClickHouse Server (data warehouse)
+
+  clickhouse-server:
+    container_name: de_project2_clickhouse_server
+    image: clickhouse/clickhouse-server:24.4
+    user: "clickhouse:clickhouse" # From your local version — fixes permission issues
+    environment:
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+      CLICKHOUSE_USER: airflow
+      CLICKHOUSE_PASSWORD: supersecret
+      CLICKHOUSE_DB: default
+    ports:
+      - "9000:9000" # Native client
+      - "18123:8123" # HTTP interface (Airflow-compatible)
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./device_location_data:/var/lib/clickhouse/user_files # local CSVs for device and location data
+      - ./config/users.d:/etc/clickhouse-server/users.d
+      - ./clickhouse-init:/docker-entrypoint-initdb.d
+    restart: always
+
+    #  ClickHouse Web UI
+
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8123/ping" ]
+      interval: 5s
+      retries: 20
+
+  #  ClickHouse Web UI (CloudBeaver)
+
+  clickhouse-ui:
+    container_name: de_project2_clickhouse-ui
+    image: dbeaver/cloudbeaver:latest
+    environment:
+      - CB_ADMIN_NAME=cbadmin
+      - CB_ADMIN_PASSWORD=CloudBeaver1
+      - CB_SERVER_NAME=Project ClickHouse
+    ports:
+      - "8978:8978"
+    user: "0" # run as root to copy the seed and fix permissions
+    volumes:
+      - cloudbeaver-data:/opt/cloudbeaver/workspace
+      # mount the seed file READ-ONLY in a separate path (NOT over the workspace)
+      - ./cloudbeaver-init/.dbeaver/data-sources.json:/opt/cloudbeaver/seed/data-sources.json:ro
+    command: >
+      /bin/sh -lc '
+        TARGET="/opt/cloudbeaver/workspace/GlobalConfiguration/.dbeaver/data-sources.json";
+        mkdir -p /opt/cloudbeaver/workspace/GlobalConfiguration/.dbeaver;
+        # copy seed only if missing or empty
+        if [ ! -s "$$TARGET" ] && [ -f /opt/cloudbeaver/seed/data-sources.json ]; then
+          cp /opt/cloudbeaver/seed/data-sources.json "$$TARGET" || true;
+        fi;
+        chmod -R a+rwX /opt/cloudbeaver/workspace;
+        exec /opt/cloudbeaver/run-server.sh
+      '
+    depends_on:
+      - clickhouse-server
+    restart: always
+
+  #  Airflow Webserver
+
+  airflow-webserver:
+    image: apache/airflow:2.8.1
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: de_project2_airflow_webserver
+    command: webserver
+    env_file:
+      - .env.local
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@de_project2_airflow_db:5432/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - AIRFLOW__CORE__FERNET_KEY=B34E7pmv18aZl4g6z105ChW7zHsZjsfmGMSvveDaTQ0=
+      - DBT_LOG_PATH=/tmp/dbt-logs
+      - DBT_TARGET_PATH=/tmp/dbt-target
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./data:/opt/airflow/data
+      - ./dbt:/opt/airflow/dbt
+    depends_on:
+      - airflow-init
+      - clickhouse-server
+    restart: always
+
+  #  Airflow Scheduler
+
+  airflow-scheduler:
+    image: apache/airflow:2.8.1
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: de_project2_airflow_scheduler
+    command: scheduler
+    env_file:
+      - .env.local
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@de_project2_airflow_db:5432/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__CORE__FERNET_KEY=B34E7pmv18aZl4g6z105ChW7zHsZjsfmGMSvveDaTQ0=
+      - DBT_LOG_PATH=/tmp/dbt-logs
+      - DBT_TARGET_PATH=/tmp/dbt-target
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./data:/opt/airflow/data
+      - ./dbt:/opt/airflow/dbt
+    depends_on:
+      - airflow-init
+      - clickhouse-server
+    restart: always
+
+  #  Airflow DB Initialization
+
+  airflow-init:
+    image: apache/airflow:2.8.1
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: de_project2_airflow_init
+    env_file:
+      - .env.local
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db init
+        airflow users create \
+          --username airflow \
+          --password airflow \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com
+
+        airflow connections add clickhouse_default \
+          --conn-uri "clickhouse+native://airflow:supersecret@de_project2_clickhouse_server:9000/default" || true
+
+        airflow connections add elering_api \
+          --conn-uri "https://dashboard.elering.ee" || true
+
+        if [ -n "$$HA_BASE" ] && [ -n "$$HA_TOKEN" ]; then
+          airflow connections add home_assistant_api \
+            --conn-type http \
+            --conn-host "$$HA_BASE" \
+            --conn-password "$$HA_TOKEN" || true
+          echo "Created 'home_assistant_api' pointing to $$HA_BASE"
+        else
+          echo "Skipped 'home_assistant_api' (set HA_BASE and HA_TOKEN in .env.local)."
+        fi
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@de_project2_airflow_db:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=B34E7pmv18aZl4g6z105ChW7zHsZjsfmGMSvveDaTQ0=
+    depends_on:
+      - airflow-db
+    restart: "no"
+
+  #  DBT container (for transformations)
+
+  dbt:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dbt
+    depends_on:
+      - clickhouse-server
+    volumes:
+      - ./dbt:/dbt
+    working_dir: /dbt
+    environment:
+      DBT_PROFILES_DIR: /dbt
+    tty: true

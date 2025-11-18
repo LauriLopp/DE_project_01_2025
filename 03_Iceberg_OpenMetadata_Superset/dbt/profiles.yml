@@ -1,0 +1,14 @@
+ac_energy_usage:     # must match "profile" in dbt_project.yml
+  target: dev
+  outputs:
+    dev:
+      type: clickhouse
+      schema: default
+      database: default
+      host: clickhouse-server
+      port: 9000
+      user: airflow
+      password: supersecret
+      secure: false
+      driver: native
+      threads: 4
