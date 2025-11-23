@@ -1,0 +1,24 @@
+# Sample PyIceberg catalog configuration (informational)
+# PyIceberg primarily reads catalog config from env vars prefixed with
+# PYICEBERG_CATALOG__<NAME>__<KEY>. This file is a convenience example
+# and can be adapted if you use file-based configuration.
+
+catalog:
+  name: default
+  type: s3
+  warehouse: s3://warehouse/
+  s3:
+    endpoint: http://minio:9000
+    access_key_id: admin
+    secret_access_key: password
+    region: us-east-1
+    path_style_access: true
+
+# If you prefer environment variables, ensure the following are set in
+# docker-compose for Airflow services (already present in compose):
+# PYICEBERG_CATALOG__DEFAULT__TYPE=s3
+# PYICEBERG_CATALOG__DEFAULT__WAREHOUSE=s3://warehouse/
+# PYICEBERG_CATALOG__DEFAULT__S3_ENDPOINT=http://minio:9000
+# PYICEBERG_CATALOG__DEFAULT__S3_ACCESS_KEY_ID=admin
+# PYICEBERG_CATALOG__DEFAULT__S3_SECRET_ACCESS_KEY=password
+# PYICEBERG_CATALOG__DEFAULT__S3_PATH_STYLE_ACCESS=true

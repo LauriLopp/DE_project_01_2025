@@ -1,3 +1,9 @@
+import pandas as pd
+import pyarrow as pa
+
+from pyiceberg.catalog import load_catalog
+from pyiceberg.schema import Schema
+from pyiceberg.types import NestedField, TimestampType, StringType, DoubleType
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
@@ -6,6 +12,7 @@ from airflow.providers.http.hooks.http import HttpHook
 from datetime import datetime, timezone
 import os
 import json
+import logging
 
 DBT_PROJECT_DIR = "/opt/airflow/dbt"
 # Route dbt logs and target to /tmp to avoid bind-mount permission issues on Windows
@@ -42,6 +49,94 @@ HA_WEATHER_ENTITY_ID = "weather.forecast_home"
 
 
 # --- DATABASE SETUP TASKS ---
+def setup_bronze_elering_table():
+    """
+    Creates a READ-ONLY ClickHouse table that maps to the Iceberg table on MinIO.
+    Name stays bronze_elering_price so dbt doesn't change.
+    """
+    ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
+
+    ch_conn.execute("""
+        DROP TABLE IF EXISTS bronze_elering_price
+    """)
+
+    ch_conn.execute("""
+        CREATE TABLE bronze_elering_price
+        ENGINE = IcebergS3(
+            'http://minio:9000/iceberg/warehouse/bronze/elering_price_iceberg',
+            'minio',
+            'minio123',
+            'Parquet'
+        )
+    """)
+    
+def get_elering_iceberg_table():
+    """
+    Returns the Iceberg table for Elering prices, creating namespace/table if missing.
+
+    Notes:
+      - Nessie is configured with a named warehouse "warehouse"
+        pointing to s3://iceberg/warehouse/
+      - Bronze tables are created nullable (required=False) to match Pandas/Arrow default.
+      - If you need to rebuild the table with a new schema, set:
+            ICEBERG_RECREATE_ELERING=1
+        in the Airflow container env and rerun once.
+    """
+    catalog = load_catalog(
+        "bronze_catalog",
+        **{
+            "type": "rest",
+            "uri": "http://nessie:19120/iceberg",
+
+            # must be the Nessie warehouse NAME
+            "warehouse": "warehouse",
+
+            # MinIO / S3 props for PyIceberg FileIO
+            "s3.endpoint": "http://minio:9000",
+            "s3.access-key-id": "minio",
+            "s3.secret-access-key": "minio123",
+            "s3.region": "us-east-1",
+            "s3.path-style-access": "true",
+
+            # safety: allow automatic ns->us downcast if any sneaks through
+            "downcast-ns-timestamp-to-us-on-write": "true",
+        },
+    )
+
+    # ensure namespace exists
+    existing_namespaces = {ns[0] for ns in catalog.list_namespaces()}
+    if "bronze" not in existing_namespaces:
+        catalog.create_namespace("bronze")
+
+    table_id = "bronze.elering_price_iceberg"
+    table_location = "s3://iceberg/warehouse/bronze/elering_price_iceberg"
+
+    # optional one-time rebuild if schema changed
+    if os.environ.get("ICEBERG_RECREATE_ELERING") == "1" and catalog.table_exists(table_id):
+        catalog.drop_table(table_id)
+
+    if not catalog.table_exists(table_id):
+        schema = Schema(
+            NestedField(field_id=1, name="ingestion_ts", field_type=TimestampType(), required=False),
+            NestedField(field_id=2, name="ts_utc", field_type=TimestampType(), required=False),
+            NestedField(field_id=3, name="zone", field_type=StringType(), required=False),
+            NestedField(field_id=4, name="currency", field_type=StringType(), required=False),
+            NestedField(field_id=5, name="price_per_mwh", field_type=DoubleType(), required=False),
+        )
+
+        catalog.create_table(
+            table_id,
+            schema=schema,
+            location=table_location,
+            properties={
+                "format-version": "2",
+                "write.format.default": "parquet",
+            },
+        )
+    tbl = catalog.load_table(table_id)
+    logging.info(f"[Elering Iceberg] Active table location: {tbl.location()}")
+    return tbl
+
 
 def setup_bronze_iot_table():
     """Creates the table for raw Home Assistant IoT sensor data."""
@@ -58,18 +153,28 @@ def setup_bronze_iot_table():
     """)
 
 def setup_bronze_price_table():
-    """Creates the table for hourly Elering price data."""
+    """Creates a VIEW for hourly Elering price data that reads Iceberg from MinIO."""
     ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
-    ch_conn.execute("""
-        CREATE TABLE IF NOT EXISTS bronze_elering_price (
-            ingestion_ts   DateTime,
-            ts_utc         DateTime,
-            zone           String,
-            currency       String,
-            price_per_mwh  Float64
+
+    active_uuid_folder = "elering_price_iceberg_52af5092-7dab-491c-beb2-77ba954f00f7"
+    iceberg_url = (
+        f"http://minio:9000/iceberg/warehouse/bronze/{active_uuid_folder}"
+    )
+
+    # Drop any previous local table or view with that name
+    ch_conn.execute("DROP TABLE IF EXISTS bronze_elering_price")
+    ch_conn.execute("DROP VIEW IF EXISTS bronze_elering_price")
+
+    # Create view pointing to Iceberg on MinIO
+    ch_conn.execute(f"""
+        CREATE VIEW bronze_elering_price AS
+        SELECT *
+        FROM iceberg(
+            '{iceberg_url}',
+            'minio',
+            'minio123',
+            'Parquet'
         )
-        ENGINE = ReplacingMergeTree(ingestion_ts)
-        ORDER BY (zone, ts_utc)
     """)
 
 def setup_bronze_weather_table():
@@ -128,29 +233,62 @@ def fetch_iot_history(**context):
         print(f"Inserted {len(rows)} IoT records.")
 
 def fetch_elering_history(**context):
-    """Fetches historical Elering prices and loads into bronze_elering_price."""
     start_dt = context["data_interval_start"]
     end_dt = context["data_interval_end"]
     print(f"--- Elering Ingestion: Fetching data from {start_dt.isoformat()} to {end_dt.isoformat()} ---")
 
     http = HttpHook(method="GET", http_conn_id="elering_api")
-    ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
-
     params = {"start": start_dt.isoformat(), "end": end_dt.isoformat()}
-    resp = http.run(endpoint="/api/nps/price", data=params)
+
+    # IMPORTANT: params must go as query string, not request body
+    resp = http.run(
+        endpoint="/api/nps/price",
+        extra_options={"params": params},
+    )
+
+    print(f"Elering status={resp.status_code}")
     payload = resp.json()
+    print(f"Elering success={payload.get('success')}, keys={list(payload.keys())}")
 
     if not payload.get("success") or not payload.get("data"):
+        print("No Elering data returned.")
+        return
+
+    ee_data = payload["data"].get("ee", [])
+    if not ee_data:
+        print("No EE zone rows in payload.")
         return
 
     rows = []
     ingestion_ts = datetime.utcnow()
-    for rec in payload["data"]["ee"]:
-        rows.append((ingestion_ts, datetime.utcfromtimestamp(rec["timestamp"]), "EE", "EUR", float(rec["price"])))
+    for rec in ee_data:
+        rows.append({
+            "ingestion_ts": ingestion_ts,
+            "ts_utc": datetime.utcfromtimestamp(rec["timestamp"]),
+            "zone": "EE",
+            "currency": "EUR",
+            "price_per_mwh": float(rec["price"]),
+        })
 
-    if rows:
-        ch_conn.execute("INSERT INTO bronze_elering_price VALUES", rows)
-        print(f"Inserted {len(rows)} Elering price records.")
+    df = pd.DataFrame(rows)
+
+    # Iceberg via PyIceberg does NOT support ns precision; force microseconds.
+    for col in ["ingestion_ts", "ts_utc"]:
+        df[col] = (
+            pd.to_datetime(df[col], utc=False)
+              .dt.tz_localize(None)        # ensure naive timestamps
+              .astype("datetime64[us]")    # downcast to microseconds
+        )
+
+    arrow_tbl = pa.Table.from_pandas(df, preserve_index=False)
+
+    tbl = get_elering_iceberg_table()
+    tbl.append(arrow_tbl)
+
+    print(f"Wrote {len(df)} Elering rows to Iceberg on MinIO.")
+
+
+
 
 def fetch_weather_history(**context):
     """Fetches history for the WEATHER entity and loads into bronze_weather_history."""

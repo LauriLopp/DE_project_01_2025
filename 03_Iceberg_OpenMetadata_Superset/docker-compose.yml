@@ -7,6 +7,66 @@ volumes:
 
 
 services:
+  nessie:
+    image: ghcr.io/projectnessie/nessie:0.104.1
+    platform: linux/amd64
+    container_name: de_project2_nessie
+    ports:
+      - "19120:19120"
+    environment:
+      - nessie.version.store.type=IN_MEMORY
+      - quarkus.http.port=19120
+      - quarkus.profile=dev
+      - nessie.server.authentication.enabled=false
+
+    # Warehouses
+      - nessie.catalog.default-warehouse=warehouse
+      - nessie.catalog.warehouses.warehouse.location=s3://iceberg/warehouse/
+
+    # ---- Default/global S3 config ----
+      - nessie.catalog.service.s3.default-options.region=us-east-1
+      - nessie.catalog.service.s3.default-options.endpoint=http://minio:9000/
+      - nessie.catalog.service.s3.default-options.path-style-access=true
+
+    # Secret URN + actual secret values
+      - nessie.catalog.service.s3.default-options.access-key=urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key
+      - nessie.catalog.secrets.access-key.name=minio
+      - nessie.catalog.secrets.access-key.secret=minio123
+
+    # ---- Bucket-specific overrides for bucket "iceberg" ----
+      - nessie.catalog.service.s3.buckets.iceberg.region=us-east-1
+      - nessie.catalog.service.s3.buckets.iceberg.endpoint=http://minio:9000/
+      - nessie.catalog.service.s3.buckets.iceberg.path-style-access=true
+      - nessie.catalog.service.s3.buckets.iceberg.access-key=urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key
+
+
+
+
+  # MINIO
+  minio:
+    container_name: de_project2_minio
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    ports:
+      - "9002:9000"   # host port avoids clashing with CH native 9000
+      - "9001:9001"
+    volumes:
+      - ./minio-data:/data
+    restart: always
+
+  minio-mc:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minio minio123;
+      mc mb -p local/iceberg || true;
+      mc mb -p local/iceberg/warehouse || true;
+      exit 0;"
 
   #  Airflow metadata database (Postgres)
 
