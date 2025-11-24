@@ -1,6 +1,6 @@
 
 
-  create view `default`.`stg_device` 
+  create view `default`.`stg_device__dbt_tmp` 
   
     
     

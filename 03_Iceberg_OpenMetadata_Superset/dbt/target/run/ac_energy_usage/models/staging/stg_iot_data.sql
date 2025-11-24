@@ -1,6 +1,6 @@
 
 
-  create view `default`.`stg_iot_data` 
+  create view `default`.`stg_iot_data__dbt_tmp` 
   
     
     

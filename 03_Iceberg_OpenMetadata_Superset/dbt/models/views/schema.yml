@@ -1,0 +1,9 @@
+version: 2
+
+models:
+
+  - name: v_heating_energy_full_access
+    description: "Full access analytical view for analysts"
+
+  - name: v_heating_energy_limited_access
+    description: "Limited access view with pseudonymization for privacy"

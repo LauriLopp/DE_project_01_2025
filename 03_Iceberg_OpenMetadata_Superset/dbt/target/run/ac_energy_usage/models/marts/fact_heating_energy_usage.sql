@@ -4,7 +4,7 @@
     
     
         
-        insert into `default`.`fact_heating_energy_usage`
+        insert into `default`.`fact_heating_energy_usage__dbt_backup`
         ("FactKey", "TimeKey", "DeviceKey", "LocationKey", "ElectricityPrice", "ASHP_Power", "Boiler_Power", "Air_Drier_Power", "Boiler_Voltage", "IndoorTemp", "IndoorHumidityPerc", "IndoorHumidityAbs", "WC_HumidityAbs", "WC_Temp", "OutdoorTemp", "DewPoint", "OutdoorHumidityPerc", "CloudCoverage", "UV_Index", "AirPressure_mmHg", "WindDir", "WindGustSpeed_ms", "WindSpeed_ms", "WeatherCondition")
 
 -- ============================================================================

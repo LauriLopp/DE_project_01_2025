@@ -4,7 +4,7 @@
     
     
         
-        insert into `default`.`dim_location`
+        insert into `default`.`dim_location__dbt_backup`
         ("LocationKey", "DeviceLocation", "ClosestWeatherStation", "PricingRegion", "ValidFrom", "ValidTo")
 
 SELECT

@@ -1,6 +1,6 @@
 
 
-  create view `default`.`stg_location` 
+  create view `default`.`stg_location__dbt_tmp` 
   
     
     

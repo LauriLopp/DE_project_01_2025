@@ -1,6 +1,6 @@
 
 
-  create view `default`.`stg_price_data` 
+  create view `default`.`stg_price_data__dbt_tmp` 
   
     
     

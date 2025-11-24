@@ -4,7 +4,7 @@
     
     
         
-        insert into `default`.`dim_time`
+        insert into `default`.`dim_time__dbt_backup`
         ("TimeKey", "FullDate", "Year", "Month", "Day", "DayOfWeek", "HourOfDay", "Season", "IsHoliday", "IsWeekend", "IsPeakHour")
 
 -- Gold-layer: DIM_TIME (sparse)

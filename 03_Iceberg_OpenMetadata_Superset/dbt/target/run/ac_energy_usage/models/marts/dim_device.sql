@@ -4,7 +4,7 @@
     
     
         
-        insert into `default`.`dim_device`
+        insert into `default`.`dim_device__dbt_backup`
         ("DeviceKey", "Brand", "Model", "MinPower", "InstallationDate", "ValidTo")
 
 -- Gold layer: DIM_DEVICE

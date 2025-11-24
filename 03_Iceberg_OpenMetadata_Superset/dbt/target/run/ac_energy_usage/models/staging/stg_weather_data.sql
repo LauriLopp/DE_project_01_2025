@@ -1,6 +1,6 @@
 
 
-  create view `default`.`stg_weather_data` 
+  create view `default`.`stg_weather_data__dbt_tmp` 
   
     
     
