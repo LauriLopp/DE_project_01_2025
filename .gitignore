@@ -39,6 +39,10 @@ data/connections.json
 /02_Airflow_ClickHouse_dbt/dbt/dbt_packages/
 /02_Airflow_ClickHouse_dbt/dbt/.user.yml
 /02_Airflow_ClickHouse_dbt/project2_instructions.pdf
+/03_Iceberg_OpenMetadata_Superset/dbt/target/
+/03_Iceberg_OpenMetadata_Superset/dbt/dbt_packages/
+/03_Iceberg_OpenMetadata_Superset/dbt/.user.yml
+/03_Iceberg_OpenMetadata_Superset/project2_instructions.pdf
 /dynamic_TODOs.txt
 
 # Ignore exploration notebook (large/volatile)
