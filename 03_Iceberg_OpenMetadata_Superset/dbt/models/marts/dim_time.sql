@@ -1,4 +1,4 @@
-{{config(
+{{ config(
     materialized='table',
     post_hook =[
       "GRANT SELECT ON {{ this }} TO analyst_limited",
