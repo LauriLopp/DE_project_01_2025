@@ -1,6 +1,10 @@
 {{
   config(
-    materialized='table'
+    materialized='table',
+    post_hook =[
+      "GRANT SELECT ON {{ this }} TO analyst_limited",
+      "GRANT SELECT ON {{ this }} TO analyst_full"
+    ]
   )
 }}
 
