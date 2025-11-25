@@ -51,19 +51,33 @@ HA_WEATHER_ENTITY_ID = "weather.forecast_home"
 # --- DATABASE SETUP TASKS ---
 def setup_bronze_elering_table():
     """
-    Creates a READ-ONLY ClickHouse table that maps to the Iceberg table on MinIO.
-    Name stays bronze_elering_price so dbt doesn't change.
+    Ensure ClickHouse has a bronze_elering_price relation that points
+    at the *current* Iceberg table location in MinIO.
+
+    - The logical table id is bronze.elering_price_iceberg
+    - Iceberg chooses a physical location (with a UUID suffix)
+    - We read tbl.location() and use that in the ClickHouse iceberg() call
     """
-    ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
+    # 1) Ask Iceberg/Nessie what the active location is
+    tbl = get_elering_iceberg_table()  # this does NOT write data, just load/create table
+    location = tbl.location()          # e.g. s3://iceberg/warehouse/bronze/elering_price_iceberg_<uuid>
 
-    ch_conn.execute("""
-        DROP TABLE IF EXISTS bronze_elering_price
-    """)
+    # 2) Convert s3 URL → MinIO HTTP URL for ClickHouse
+    #    s3://iceberg/...  ->  http://minio:9000/iceberg/...
+    if not location.startswith("s3://iceberg/"):
+        raise RuntimeError(f"Unexpected Elering Iceberg location: {location}")
+    http_url = location.replace("s3://", "http://minio:9000/")
 
-    ch_conn.execute("""
-        CREATE TABLE bronze_elering_price
-        ENGINE = IcebergS3(
-            'http://minio:9000/iceberg/warehouse/bronze/elering_price_iceberg',
+    # 3) (Re)create the ClickHouse view
+    ch = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
+    ch.execute("DROP TABLE IF EXISTS bronze_elering_price")
+    ch.execute("DROP VIEW IF EXISTS bronze_elering_price")
+
+    ch.execute(f"""
+        CREATE VIEW bronze_elering_price AS
+        SELECT *
+        FROM iceberg(
+            '{http_url}',
             'minio',
             'minio123',
             'Parquet'
@@ -375,7 +389,10 @@ with DAG(
 
     # Setup tasks to ensure tables exist
     task_setup_iot = PythonOperator(task_id="setup_iot_table", python_callable=setup_bronze_iot_table)
-    task_setup_price = PythonOperator(task_id="setup_price_table", python_callable=setup_bronze_price_table)
+    task_setup_price = PythonOperator(
+    task_id="setup_price_table",
+    python_callable=setup_bronze_elering_table,
+    )
     task_setup_weather = PythonOperator(task_id="setup_weather_table", python_callable=setup_bronze_weather_table)
     task_create_static_tables = PythonOperator(task_id="create_device_and_location_tables", python_callable=create_device_and_location_tables,
     )
@@ -425,6 +442,8 @@ with DAG(
     task_setup_iot >> task_fetch_iot
     task_setup_price >> task_fetch_price
     task_setup_weather >> task_fetch_weather
+
     [task_fetch_iot, task_fetch_price, task_fetch_weather, task_create_static_tables] >> task_dbt_debug
     task_dbt_debug >> task_dbt_deps >> task_dbt_seed >> task_dbt_run >> task_dbt_test
+
     

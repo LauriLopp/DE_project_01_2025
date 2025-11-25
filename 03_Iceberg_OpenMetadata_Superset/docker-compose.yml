@@ -168,6 +168,7 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=B34E7pmv18aZl4g6z105ChW7zHsZjsfmGMSvveDaTQ0=
       - DBT_LOG_PATH=/tmp/dbt-logs
       - DBT_TARGET_PATH=/tmp/dbt-target
+      
     ports:
       - "8080:8080"
     volumes:
@@ -198,6 +199,7 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=B34E7pmv18aZl4g6z105ChW7zHsZjsfmGMSvveDaTQ0=
       - DBT_LOG_PATH=/tmp/dbt-logs
       - DBT_TARGET_PATH=/tmp/dbt-target
+     
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
