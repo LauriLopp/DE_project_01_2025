@@ -25,6 +25,7 @@ pgdata/
 .vscode/
 
 # .env files
+.env
 .env.local
 connections.json
 data/connections.json
