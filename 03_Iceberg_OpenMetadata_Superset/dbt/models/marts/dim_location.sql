@@ -1,4 +1,12 @@
-{{ config(materialized='table') }}
+{{
+  config(
+    materialized='table',
+    post_hook =[
+      "GRANT SELECT ON {{ this }} TO analyst_limited",
+      "GRANT SELECT ON {{ this }} TO analyst_full"
+    ]
+  )
+}}
 
 SELECT
   row_number() OVER () AS LocationKey,
