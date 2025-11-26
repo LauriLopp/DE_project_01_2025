@@ -14,4 +14,8 @@ RUN pip install --no-cache-dir \
 	clickhouse-driver \
 	clickhouse-connect \
 	dbt-core==1.7.9 \
-	dbt-clickhouse==1.7.6
+	dbt-clickhouse==1.7.6 \
+	"pyiceberg>=0.6.0" \
+	pyarrow \
+	s3fs \
+	fsspec

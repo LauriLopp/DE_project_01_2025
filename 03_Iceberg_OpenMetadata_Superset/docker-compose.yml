@@ -4,9 +4,48 @@ volumes:
   airflow-pgdata:
   clickhouse-data:
   cloudbeaver-data:
+  minio-data:
 
 
 services:
+
+  #  MinIO Object Storage (S3 Compatible for Iceberg)
+
+  minio:
+    image: minio/minio
+    container_name: de_project3_minio
+    ports:
+      - "9002:9000"   # API (use 9002 to avoid conflict with ClickHouse native port)
+      - "9001:9001"   # Console
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: always
+
+  #  Create 'warehouse' bucket for Iceberg tables
+
+  createbuckets:
+    image: minio/mc
+    container_name: de_project3_createbuckets
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb --ignore-existing myminio/warehouse;
+      /usr/bin/mc anonymous set public myminio/warehouse;
+      exit 0;
+      "
+    restart: "no"
 
   #  Airflow metadata database (Postgres)
 
