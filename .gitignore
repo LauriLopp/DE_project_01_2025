@@ -43,7 +43,7 @@ data/connections.json
 /03_Iceberg_OpenMetadata_Superset/dbt/target/
 /03_Iceberg_OpenMetadata_Superset/dbt/dbt_packages/
 /03_Iceberg_OpenMetadata_Superset/dbt/.user.yml
-/03_Iceberg_OpenMetadata_Superset/project2_instructions.pdf
+/03_Iceberg_OpenMetadata_Superset/minio-data/
 /dynamic_TODOs.txt
 
 # Ignore exploration notebook (large/volatile)
