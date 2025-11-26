@@ -7,6 +7,6 @@ sources:
     tables:
       - name: bronze_iot_raw_data
       - name: bronze_weather_history
-      - name: bronze_elering_price
+      - name: bronze_elering_iceberg_readonly  # Reads from MinIO/Iceberg via ClickHouse s3() view
       - name: bronze_location
       - name: bronze_device

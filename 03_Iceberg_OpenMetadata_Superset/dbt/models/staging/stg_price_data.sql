@@ -5,6 +5,7 @@
 }}
 
 -- Staging: clean electricity price data
+-- Source: MinIO/Iceberg via ClickHouse s3() view (bronze_elering_iceberg_readonly)
 -- Requirements:
 -- 1) Meaningful column names
 -- 2) Consistently use local time (Europe/Tallinn) - already in bronze layer
@@ -16,7 +17,7 @@ WITH raw AS (
 	SELECT
 		toTimeZone(ts_utc, 'Europe/Tallinn') AS timestamp_raw,
 		price_per_mwh AS price_eur_per_mwh
-	FROM {{ source('bronze_layer', 'bronze_elering_price') }}
+	FROM {{ source('bronze_layer', 'bronze_elering_iceberg_readonly') }}
 ), aggregated AS (
 	SELECT
 		toStartOfHour(timestamp_raw) AS timestamp,
