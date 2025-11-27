@@ -70,7 +70,7 @@ def setup_bronze_iot_table():
 # The ClickHouse view bronze_elering_iceberg_readonly reads from MinIO Parquet files
 
 def setup_bronze_weather_table():
-    """Creates the new, separate table for historical weather data."""
+    """Create bronze_weather_history table if not exists."""
     ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
     ch_conn.execute("""
         CREATE TABLE IF NOT EXISTS bronze_weather_history (
@@ -95,34 +95,8 @@ def setup_bronze_weather_table():
 
 # --- ICEBERG SETUP AND WRITE TASKS ---
 
-def get_iceberg_catalog():
-    """
-    Returns a PyIceberg catalog configured for MinIO using a static/file-based catalog.
-    This avoids SQLAlchemy 2.0 dependency issues with Airflow.
-    """
-    from pyiceberg.catalog import load_catalog
-    
-    # Use a static table configuration - catalog metadata stored in MinIO itself
-    catalog = load_catalog(
-        "default",
-        **{
-            "type": "rest",
-            "uri": "http://minio:9000",
-            "s3.endpoint": MINIO_ENDPOINT,
-            "s3.access-key-id": MINIO_ACCESS_KEY,
-            "s3.secret-access-key": MINIO_SECRET_KEY,
-            "warehouse": ICEBERG_WAREHOUSE,
-        },
-    )
-    return catalog
-
-
 def setup_iceberg_catalog():
-    """
-    Sets up the PyIceberg catalog with MinIO as the S3 backend.
-    For simplicity, we'll write Iceberg data directly without a formal catalog.
-    The table metadata will be stored alongside the data in MinIO.
-    """
+    """Ensure MinIO warehouse path exists."""
     import s3fs
     
     # Just ensure the warehouse path exists in MinIO
@@ -144,10 +118,7 @@ def setup_iceberg_catalog():
 
 
 def write_elering_to_iceberg(**context):
-    """
-    Fetches Elering price data and writes it as Parquet files to MinIO.
-    This is the single source of truth for electricity price data (no ClickHouse bronze table).
-    """
+    """Fetch Elering prices and write to MinIO as Parquet."""
     import s3fs
     import uuid
 
@@ -216,11 +187,7 @@ def write_elering_to_iceberg(**context):
 
 
 def create_clickhouse_iceberg_view(**context):
-    """
-    Create or update ClickHouse view to read Elering price Parquet files from MinIO.
-    This allows querying Iceberg data directly from ClickHouse.
-    The view name matches what dbt expects as a source.
-    """
+    """Create ClickHouse view to query Elering data from MinIO."""
     ch_hook = ClickHouseHook(clickhouse_conn_id="clickhouse_default")
     ch_conn = ch_hook.get_conn()
     

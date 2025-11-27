@@ -14,7 +14,8 @@
 
 WITH raw AS (
 	SELECT
-		toTimeZone(last_changed, 'Europe/Tallinn') AS timestamp_raw,
+		-- Properly convert from UTC to Tallinn (last_changed is stored as UTC)
+		toTimeZone(toDateTime(last_changed, 'UTC'), 'Europe/Tallinn') AS timestamp_raw,
 		temperature_C       		AS temperature_c,
 		dew_point_C         		AS dew_point_c,
 		humidity_percent    		AS humidity_perc,

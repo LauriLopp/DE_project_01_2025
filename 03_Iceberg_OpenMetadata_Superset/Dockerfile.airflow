@@ -18,4 +18,5 @@ RUN pip install --no-cache-dir \
 	"pyiceberg>=0.6.0" \
 	pyarrow \
 	s3fs \
-	fsspec
+	fsspec \
+	aiohttp

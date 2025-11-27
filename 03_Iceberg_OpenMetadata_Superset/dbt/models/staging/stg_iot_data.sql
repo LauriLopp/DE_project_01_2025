@@ -4,18 +4,12 @@
 	)
 }}
 
--- Staging: transform long IoT readings into a wide table per hour with averages
--- Contract:
---   Input  (bronze_iot_raw_data): ingestion_ts DateTime, entity_id String, state String, last_changed DateTime, attributes String
---   Output (view): one row per hour with average values per measurement
--- Notes:
---   - Values are cast to Float64 where possible (non-numeric -> NULL)
---   - Aggregated to hourly averages using toStartOfHour()
+-- Pivot IoT readings to hourly averages per sensor
 
 WITH base AS (
 	SELECT
-		-- Parse IoT timestamps (often ISO with 'Z') and convert to local time
-		toTimeZone(last_changed, 'Europe/Tallinn') as timestamp,
+		-- Properly convert from UTC to Tallinn (last_changed is stored as UTC)
+		toTimeZone(toDateTime(last_changed, 'UTC'), 'Europe/Tallinn') as timestamp,
 		entity_id,
 		toFloat64OrNull(state)                                                    AS value
 	FROM {{ source('bronze_layer', 'bronze_iot_raw_data') }}
