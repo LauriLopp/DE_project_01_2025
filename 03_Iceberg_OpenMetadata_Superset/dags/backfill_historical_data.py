@@ -23,9 +23,10 @@ MINIO_SECRET_KEY = "minioadmin"
 
 # Backfill range - adjust as needed
 BACKFILL_START = datetime(2025, 10, 1, tzinfo=timezone.utc)
-# Stop at previous hour to avoid overlap with continuous DAG
-_now = datetime.now(timezone.utc)
-BACKFILL_END = _now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
+# NOTE: BACKFILL_END is now calculated at runtime inside each task function
+# to ensure it reflects the actual execution time, not DAG parse time.
+# This prevents the backfill from overlapping with data already ingested
+# by the continuous DAG.
 
 # Open-Meteo Historical API configuration (for weather backfill)
 OPENMETEO_URL = "https://archive-api.open-meteo.com/v1/archive"
@@ -59,17 +60,28 @@ HA_IOT_ENTITY_IDS = [
 HA_WEATHER_ENTITY_ID = "weather.forecast_home"
 
 
+def _get_backfill_end():
+    """Calculate BACKFILL_END at runtime to avoid DAG parse-time issues.
+    
+    Returns the start of the previous hour to avoid overlap with continuous DAG.
+    E.g., if called at 14:45 UTC, returns 13:00 UTC.
+    """
+    now = datetime.now(timezone.utc)
+    return now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
+
+
 def backfill_elering_to_iceberg(**context):
     """Fetch historical Elering prices and write to MinIO as Parquet."""
     import s3fs
     import uuid
     
-    print(f"--- Backfilling Elering data from {BACKFILL_START} to {BACKFILL_END} ---")
+    backfill_end = _get_backfill_end()
+    print(f"--- Backfilling Elering data from {BACKFILL_START} to {backfill_end} ---")
     
     http = HttpHook(method="GET", http_conn_id="elering_api")
     params = {
         "start": BACKFILL_START.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
-        "end": BACKFILL_END.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        "end": backfill_end.strftime("%Y-%m-%dT%H:%M:%S.000Z")
     }
     resp = http.run(endpoint="/api/nps/price", data=params)
     payload = resp.json()
@@ -128,14 +140,19 @@ def backfill_elering_to_iceberg(**context):
 
 def backfill_iot_from_statistics(**context):
     """Fetch IoT stats via HA WebSocket API, fallback to REST if unavailable."""
-    print(f"--- Backfilling IoT data from {BACKFILL_START} to {BACKFILL_END} using WebSocket Statistics API ---")
+    backfill_end = _get_backfill_end()
+    print(f"--- Backfilling IoT data from {BACKFILL_START} to {backfill_end} using WebSocket Statistics API ---")
     
-    # Run the async function
-    asyncio.run(_backfill_iot_websocket())
+    # Run the async function with the runtime-calculated end time
+    asyncio.run(_backfill_iot_websocket(backfill_end))
 
 
-async def _backfill_iot_websocket():
-    """Async WebSocket fetch for HA long-term statistics."""
+async def _backfill_iot_websocket(backfill_end):
+    """Async WebSocket fetch for HA long-term statistics.
+    
+    Args:
+        backfill_end: The end datetime for the backfill period (calculated at runtime).
+    """
     from airflow.providers.http.hooks.http import HttpHook
     
     # Get HA connection details from Airflow
@@ -205,7 +222,7 @@ async def _backfill_iot_websocket():
                     if not matching:
                         print("  ❌ No sensors have long-term statistics, falling back to chunked API")
                         await ws.close()
-                        _backfill_iot_chunked_sync(ch_conn, token)
+                        _backfill_iot_chunked_sync(ch_conn, token, backfill_end)
                         return
                 
                 # Request statistics for all sensors
@@ -213,7 +230,7 @@ async def _backfill_iot_websocket():
                     "id": 2,
                     "type": "recorder/statistics_during_period",
                     "start_time": BACKFILL_START.isoformat(),
-                    "end_time": BACKFILL_END.isoformat(),
+                    "end_time": backfill_end.isoformat(),
                     "statistic_ids": HA_IOT_ENTITY_IDS,  # Must be JSON array
                     "period": "hour",
                     "types": ["mean", "min", "max", "sum", "state"]
@@ -225,7 +242,7 @@ async def _backfill_iot_websocket():
                     error = result.get("error", {})
                     print(f"  ❌ Statistics request failed: {error}")
                     await ws.close()
-                    _backfill_iot_chunked_sync(ch_conn, token)
+                    _backfill_iot_chunked_sync(ch_conn, token, backfill_end)
                     return
                 
                 statistics_data = result.get("result", {})
@@ -295,7 +312,7 @@ async def _backfill_iot_websocket():
                     # Delete existing data in backfill range to avoid duplicates
                     # Use < (exclusive end) to preserve continuous DAG's most recent data
                     start_str = BACKFILL_START.strftime("%Y-%m-%d %H:%M:%S")
-                    end_str = BACKFILL_END.strftime("%Y-%m-%d %H:%M:%S")
+                    end_str = backfill_end.strftime("%Y-%m-%d %H:%M:%S")
                     ch_conn.execute(f"""
                         ALTER TABLE bronze_iot_raw_data 
                         DELETE WHERE last_changed >= '{start_str}' AND last_changed < '{end_str}'
@@ -304,20 +321,26 @@ async def _backfill_iot_websocket():
                     print(f"✅ Inserted {len(rows)} IoT records from Long-Term Statistics API")
                 else:
                     print("  No IoT statistics data returned, trying chunked fallback...")
-                    _backfill_iot_chunked_sync(ch_conn, token)
+                    _backfill_iot_chunked_sync(ch_conn, token, backfill_end)
                     
     except aiohttp.ClientError as e:
         print(f"  ❌ WebSocket connection failed: {e}")
         print("  Falling back to chunked REST API...")
-        _backfill_iot_chunked_sync(ch_conn, token)
+        _backfill_iot_chunked_sync(ch_conn, token, backfill_end)
     except Exception as e:
         print(f"  ❌ Unexpected error: {e}")
         print("  Falling back to chunked REST API...")
-        _backfill_iot_chunked_sync(ch_conn, token)
+        _backfill_iot_chunked_sync(ch_conn, token, backfill_end)
 
 
-def _backfill_iot_chunked_sync(ch_conn, token):
-    """Fallback: fetch IoT data via REST API in daily chunks (limited to ~10 days by HA)."""
+def _backfill_iot_chunked_sync(ch_conn, token, backfill_end):
+    """Fallback: fetch IoT data via REST API in daily chunks (limited to ~10 days by HA).
+    
+    Args:
+        ch_conn: ClickHouse connection.
+        token: Home Assistant API token.
+        backfill_end: The end datetime for the backfill period (calculated at runtime).
+    """
     from airflow.providers.http.hooks.http import HttpHook
     
     # Validate token before proceeding
@@ -338,7 +361,7 @@ def _backfill_iot_chunked_sync(ch_conn, token):
     
     # Try full range - HA will return empty for dates beyond purge window
     current = BACKFILL_START.replace(tzinfo=None)
-    end = BACKFILL_END.replace(tzinfo=None)
+    end = backfill_end.replace(tzinfo=None)
     total_rows = 0
     
     print(f"  ⚠️  Chunked fallback: Fetching from {current.date()} to {end.date()}")
@@ -394,24 +417,25 @@ def _backfill_iot_chunked_sync(ch_conn, token):
 
 def backfill_weather_from_openmeteo(**context):
     """Fetch weather history from Open-Meteo API. UV index estimated from radiation."""
-    # Use current time as end - Open-Meteo archive has ~5-day delay for recent data
-    # but we fetch up to yesterday for completeness, continuous DAG handles today
-    actual_end = BACKFILL_END.replace(tzinfo=None)
+    # Calculate BACKFILL_END at runtime to avoid DAG parse-time issues
+    backfill_end = _get_backfill_end()
+    actual_end = backfill_end.replace(tzinfo=None)
     
     print(f"--- Backfilling Weather data from Open-Meteo API ---")
     print(f"    Location: Tartu ({TARTU_LAT}, {TARTU_LON})")
-    print(f"    Period: {BACKFILL_START.date()} to {actual_end.date()}")
+    print(f"    Period: {BACKFILL_START} to {backfill_end} (hour precision)")
+    print(f"    Will skip hours >= {actual_end.isoformat()}")
     
     ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
     
     # Delete only the backfill period - preserve any data outside this range
-    # This avoids deleting recent continuous ingestion data
+    # Use < (exclusive end) to avoid deleting continuous DAG's data at boundary
     backfill_start_str = BACKFILL_START.strftime("%Y-%m-%d %H:%M:%S")
     backfill_end_str = actual_end.strftime("%Y-%m-%d %H:%M:%S")
-    print(f"  Deleting existing weather data in backfill range: {backfill_start_str} to {backfill_end_str}")
+    print(f"  Deleting existing weather data in backfill range: {backfill_start_str} to {backfill_end_str} (exclusive)")
     ch_conn.execute(f"""
         ALTER TABLE bronze_weather_history 
-        DELETE WHERE last_changed >= '{backfill_start_str}' AND last_changed <= '{backfill_end_str}'
+        DELETE WHERE last_changed >= '{backfill_start_str}' AND last_changed < '{backfill_end_str}'
     """)
     
     # Open-Meteo API parameters
@@ -461,9 +485,15 @@ def backfill_weather_from_openmeteo(**context):
                 continue
             
             rows = []
+            skipped = 0
             for i, time_str in enumerate(times):
                 # Parse timestamp
                 dt = datetime.fromisoformat(time_str)
+                
+                # Skip hours beyond backfill_end to avoid overlap with continuous DAG
+                if dt >= actual_end:
+                    skipped += 1
+                    continue
                 
                 # Get values (may be None)
                 temp = hourly.get("temperature_2m", [])[i] if i < len(hourly.get("temperature_2m", [])) else None
@@ -502,7 +532,7 @@ def backfill_weather_from_openmeteo(**context):
             if rows:
                 ch_conn.execute("INSERT INTO bronze_weather_history VALUES", rows)
                 total_rows += len(rows)
-                print(f"    Inserted {len(rows)} records")
+                print(f"    Inserted {len(rows)} records" + (f" (skipped {skipped} beyond backfill_end)" if skipped else ""))
                 
         except requests.exceptions.RequestException as e:
             print(f"    Error fetching {current.date()} to {chunk_end.date()}: {e}")
