@@ -1,0 +1,173 @@
+dashboard_title: Electricity Price and Consumption
+description: null
+css: ''
+slug: null
+certified_by: ''
+certification_details: ''
+published: true
+uuid: 713361d9-ef8c-436a-a85e-bd813d1de99d
+position:
+  CHART-WyF2VhnvyfXGaGpzRWvkd:
+    children: []
+    id: CHART-WyF2VhnvyfXGaGpzRWvkd
+    meta:
+      chartId: 1
+      height: 50
+      sliceName: Electricity prive (avg)
+      uuid: 53259c11-98f0-4331-b4eb-1364800554ac
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-3MmCbqDloueNoI2yX65W4
+    type: CHART
+  CHART-explore-2-1:
+    children: []
+    id: CHART-explore-2-1
+    meta:
+      chartId: 2
+      height: 50
+      sliceName: "Average Heat-Pump Power vs Outdoor Temperature (5\xB0C bins)"
+      uuid: 57e7acfa-2151-4b1b-813b-80733eba7450
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-OQWnSToqKCwrq7OmkQjx7
+    type: CHART
+  CHART-explore-3-1:
+    children: []
+    id: CHART-explore-3-1
+    meta:
+      chartId: 3
+      height: 50
+      sliceName: How much do price fluctuations impact cost?
+      uuid: 591c2ad4-30ce-44a3-abb1-351e3d2da4aa
+      width: 8
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-OQWnSToqKCwrq7OmkQjx7
+    type: CHART
+  CHART-explore-4-1:
+    children: []
+    id: CHART-explore-4-1
+    meta:
+      chartId: 4
+      height: 50
+      sliceName: "Energy Use vs Temp Difference (Indoor \u2013 Outdoor)"
+      uuid: 7dd5c07d-2e95-4fd5-99dc-dfe7227e4d6e
+      width: 8
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-3MmCbqDloueNoI2yX65W4
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children:
+    - ROW-3MmCbqDloueNoI2yX65W4
+    - ROW-OQWnSToqKCwrq7OmkQjx7
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: Electricity Price and Consumption
+    type: HEADER
+  ROOT_ID:
+    children:
+    - GRID_ID
+    id: ROOT_ID
+    type: ROOT
+  ROW-3MmCbqDloueNoI2yX65W4:
+    children:
+    - CHART-WyF2VhnvyfXGaGpzRWvkd
+    - CHART-explore-4-1
+    id: ROW-3MmCbqDloueNoI2yX65W4
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: ROW
+  ROW-OQWnSToqKCwrq7OmkQjx7:
+    children:
+    - CHART-explore-2-1
+    - CHART-explore-3-1
+    id: ROW-OQWnSToqKCwrq7OmkQjx7
+    meta:
+      '0': ROOT_ID
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: ROW
+metadata:
+  chart_configuration:
+    '1':
+      id: 1
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 2
+        - 3
+        - 4
+    '2':
+      id: 2
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 1
+        - 3
+        - 4
+    '3':
+      id: 3
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 1
+        - 2
+        - 4
+    '4':
+      id: 4
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 1
+        - 2
+        - 3
+  global_chart_configuration:
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    chartsInScope:
+    - 1
+    - 2
+    - 3
+    - 4
+  map_label_colors:
+    AVG(avg_power_w): '#1FA8C9'
+    AVG(energy_kwh): '#454E7C'
+    AVG(bucket_cost): '#5AC189'
+    AVG(power_w): '#1FA8C9'
+    avg_price_per_mwh: '#1FA8C9'
+    '-5.0': '#1FA8C9'
+    '0.0': '#454E7C'
+    '5.0': '#5AC189'
+    '10.0': '#FF7F44'
+    '15.0': '#666666'
+    '20.0': '#E04355'
+  color_scheme: ''
+  refresh_frequency: 0
+  color_scheme_domain: []
+  expanded_slices: {}
+  label_colors: {}
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
+  cross_filters_enabled: true
+  default_filters: '{}'
+version: 1.0.0

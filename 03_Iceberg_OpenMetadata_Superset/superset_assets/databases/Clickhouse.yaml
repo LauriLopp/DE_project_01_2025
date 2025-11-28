@@ -1,0 +1,14 @@
+database_name: Clickhouse
+sqlalchemy_uri: clickhousedb://airflow:supersecret@clickhouse-server:8123/default
+cache_timeout: null
+expose_in_sqllab: true
+allow_run_async: false
+allow_ctas: false
+allow_cvas: false
+allow_dml: false
+allow_csv_upload: false
+extra:
+  allows_virtual_table_explore: true
+impersonate_user: false
+uuid: 0db363b5-cee5-402b-9a5a-7a4b5af23d12
+version: 1.0.0
