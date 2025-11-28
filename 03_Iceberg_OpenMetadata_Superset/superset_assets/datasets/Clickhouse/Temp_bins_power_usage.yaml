@@ -1,0 +1,82 @@
+table_name: Temp_bins_power_usage
+main_dttm_col: null
+description: null
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: null
+schema: default
+sql: "WITH bucketed AS (\n  SELECT\n    5 * FLOOR(OutdoorTemp / 5.0) AS bin_start,\n\
+  \    ASHP_Power\n  FROM fact_heating_energy_usage\n  WHERE OutdoorTemp >= -25\n\
+  \    AND OutdoorTemp < 30\n    AND ASHP_Power IS NOT NULL\n)\nSELECT\n  bin_start,\n\
+  \  bin_start + 5 AS bin_end,\n  AVG(ASHP_Power) AS avg_power_w,\n  COUNT(*) AS hours\n\
+  FROM bucketed\nGROUP BY bin_start\nORDER BY bin_start;\n"
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+uuid: 591aa66d-e666-458b-acae-0676b852e540
+metrics:
+- metric_name: count
+  verbose_name: COUNT(*)
+  metric_type: count
+  expression: COUNT(*)
+  description: null
+  d3format: null
+  currency: null
+  extra: null
+  warning_text: null
+columns:
+- column_name: avg_power_w
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: Nullable(Float64)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: bin_start
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: Nullable(Float64)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: bin_end
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: Nullable(Float64)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: hours
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: UInt64
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+version: 1.0.0
+database_uuid: 0db363b5-cee5-402b-9a5a-7a4b5af23d12
