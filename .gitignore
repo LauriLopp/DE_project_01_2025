@@ -20,6 +20,7 @@ pgdata/
 *.pid
 *.seed
 *.bak
+*.zip
 
 # VS Code
 .vscode/

@@ -5,6 +5,7 @@ volumes:
   clickhouse-data:
   cloudbeaver-data:
   minio-data:
+  superset-dbdata:
 
 
 services:
@@ -15,8 +16,8 @@ services:
     image: minio/minio
     container_name: de_project3_minio
     ports:
-      - "9002:9000"   # API (use 9002 to avoid conflict with ClickHouse native port)
-      - "9001:9001"   # Console
+      - "9002:9000" # API (use 9002 to avoid conflict with ClickHouse native port)
+      - "9001:9001" # Console
     environment:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
@@ -24,7 +25,7 @@ services:
       - minio-data:/data
     command: server /data --console-address ":9001"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 30s
       timeout: 20s
       retries: 3
@@ -39,12 +40,7 @@ services:
       minio:
         condition: service_healthy
     entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin;
-      /usr/bin/mc mb --ignore-existing myminio/warehouse;
-      /usr/bin/mc anonymous set public myminio/warehouse;
-      exit 0;
-      "
+      /bin/sh -c " /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin; /usr/bin/mc mb --ignore-existing myminio/warehouse; /usr/bin/mc anonymous set public myminio/warehouse; exit 0; "
     restart: "no"
 
   #  Airflow metadata database (Postgres)
@@ -248,3 +244,52 @@ services:
     environment:
       DBT_PROFILES_DIR: /dbt
     tty: true
+
+  # -----------------------------
+  # Superset Dependencies
+  # -----------------------------
+
+  superset-redis:
+    image: redis:7
+    container_name: de_project3_superset_redis
+    restart: always
+
+  superset-db:
+    image: postgres:16
+    container_name: de_project3_superset_db
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: superset
+    volumes:
+      - superset-dbdata:/var/lib/postgresql/data
+    restart: always
+
+  # -----------------------------
+  # Superset Application
+  # -----------------------------
+
+  superset:
+    container_name: de_project3_superset
+    build:
+      context: .
+      dockerfile: Dockerfile.superset
+    depends_on:
+      - superset-db
+      - superset-redis
+    environment:
+      SUPERSET_SECRET_KEY: "supersecretkey"
+      SUPERSET_CONFIG_PATH: "/app/pythonpath/superset_config.py"
+      SUPERSET_SQLALCHEMY_DATABASE_URI: "postgresql://superset:superset@superset-db:5432/superset"
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./superset:/app/pythonpath
+    command: >
+      /bin/bash -c "
+        superset db upgrade &&
+        superset fab create-admin --username admin --password admin --firstname Admin --lastname User --email admin@superset.local || true &&
+        superset init &&
+        superset run -h 0.0.0.0 -p 8088
+      "
+    restart: always

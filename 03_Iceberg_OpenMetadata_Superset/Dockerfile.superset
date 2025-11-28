@@ -1,0 +1,18 @@
+FROM apache/superset:latest
+
+USER root
+
+# 1. Install curl (if missing) to download pip installer
+RUN apt-get update && apt-get install -y curl
+
+# 2. Download get-pip.py and install pip specifically into the /app/.venv environment
+RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
+    /app/.venv/bin/python get-pip.py && \
+    rm get-pip.py
+
+# 3. Now /app/.venv/bin/pip exists! Use it to install the driver correctly.
+#    We also force uninstall conflicting drivers just in case.
+RUN /app/.venv/bin/pip uninstall -y clickhouse-driver clickhouse-sqlalchemy || true && \
+    /app/.venv/bin/pip install --no-cache-dir "clickhouse-connect>=0.10.0" "sqlalchemy<2.0"
+
+USER superset
