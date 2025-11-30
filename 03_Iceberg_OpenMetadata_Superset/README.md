@@ -120,14 +120,101 @@ The file can be found from [Google Drive](https://drive.google.com/file/d/1_C8yH
 
 ## 🗄️ Data Governance with Apache Iceberg & OpenMetadata
 
-*Placeholder: How data governance is managed, including metadata management, lineage, and cataloging.*
+### Example of added table and column descriptions for fact table 
+![OpenMetadata column descriptions](visuals/metadata_cols.png)
+### Integrated three tests for data quality:
+
+OpenMetaData tests
+![OpenMetaData tests](visuals/openmetadata_tests.png)
+
 
 ---
 
-## 🏦 Data Storage & Analytics with ClickHouse
+## 🏦 Roles and Query access in ClickHouse
 
-*Placeholder: Overview of data storage, querying, and analytics using ClickHouse.*
 
+### Roles are created here:
+[Roles_and_Users_creation](https://github.com/LauriLopp/DE_project_2025/tree/main/03_Iceberg_OpenMetadata_Superset/clickhouse-init)
+
+*Note: the access to views is granted in view definition config*
+
+### Access views definition can be found here:
+
+[Create_full_access_view](https://github.com/LauriLopp/DE_project_2025/blob/main/03_Iceberg_OpenMetadata_Superset/dbt/models/views/v_heating_energy_full_access.sql)
+
+[Create_limited_access_view](https://github.com/LauriLopp/DE_project_2025/blob/main/03_Iceberg_OpenMetadata_Superset/dbt/models/views/v_heating_energy_limited_access.sql)
+
+### For testing run these commands:
+1. Enter clickhouse-server container:
+
+`docker exec -it de_project2_clickhouse_server bash`
+
+2. Login for full user:
+`clickhouse-client --user=user_analyst_full --password=strong_password_full`
+
+3. Run example queries with full analyst user:
+
+```
+SELECT
+  v.FactKey,
+  v.ElectricityPrice,
+  v.WC_Temp,
+  v.ASHP_Power,
+  t.IsHoliday,
+  t.Month,
+  t.Day,
+  t.HourOfDay,
+  t.IsWeekend,
+  d.Brand,
+  d.Model,
+  l.DeviceLocation,
+  l.PricingRegion
+FROM default.v_heating_energy_full_access v
+JOIN default.dim_time t ON v.TimeKey = t.TimeKey
+JOIN default.dim_device d ON v.DeviceKey = d.DeviceKey
+JOIN default.dim_location l ON v.LocationKey = l.LocationKey
+order by v.TimeKey desc
+LIMIT 10;
+```
+![Expected result](working_full_query.png)
+![Expected result](visuals/working_full_query.png)
+
+```
+SELECT * from fact_heatin_energy_usage limit 10;
+```
+![Expected result](not_working_query.png)
+![Expected result](visuals/not_working_query.png)
+
+4. Run queries with limited analyst user
+```
+SELECT
+  v.FactKey,
+  v.ElectricityPrice,
+  v.WC_Temp,
+  v.ASHP_Power,
+  t.IsHoliday,
+  t.Month,
+  t.Day,
+  t.HourOfDay,
+  t.IsWeekend,
+  d.Brand,
+  d.Model,
+  l.DeviceLocation,
+  l.PricingRegion
+FROM default.v_heating_energy_limited_access v
+JOIN default.dim_time t ON v.TimeKey = t.TimeKey
+JOIN default.dim_device d ON v.DeviceKey = d.DeviceKey
+JOIN default.dim_location l ON v.LocationKey = l.LocationKey
+order by v.TimeKey desc
+LIMIT 10;
+```
+![Expected result](working_limited_query.png)
+![Expected result](visuals/working_limited_query.png)
+```
+SELECT * from fact_heatin_energy_usage limit 10;
+```
+![Expected result](not_working_query.png)
+![Expected result](visuals/not_working_query.png)
 ---
 
 ## 📈 Visualization with Apache Superset
@@ -138,26 +225,16 @@ For visualising our API data, we created a single dashboard.
 
 ---
 
-## 🔗 Integration & Workflow
-
-*Placeholder: How the tools are integrated and how data flows through the system.*
-
----
-
 ## 🖼️ Screenshots & Visuals
 
 Elering Price data in Minio
-![Elering Price Minio](elering_price_data_parquet_minio.png)
+![Elering Price Minio](visuals/elering_price_data_parquet_minio.png)
 
 Bronze Elering Price in Clickhouse through Minio/Iceberg
-![Elering Price Clickhouse](elering_price_clickhouse.png)
+![Elering Price Clickhouse](visuals/elering_price_clickhouse.png)
 
 Apache Superset Dashboard
-![Apache Superset Dashboard](dashboard_with_data.png)
-
-OpenMetaData tests
-<img width="2559" height="679" alt="image" src="https://github.com/user-attachments/assets/5d0b9cc1-bb4e-4286-8ab7-b1492333d58f" />
-
+![Apache Superset Dashboard](visuals/dashboard_with_data.png)
 
 ---
 
@@ -167,31 +244,25 @@ Dashboard & Chart descriptions
 
 Electricity price line-chart
 
-![Electricity Price](Electricity_price.jpg)
+![Electricity Price](visuals/Electricity_price.jpg)
 
 In October and November we experienced "minus-price-day", where the price was negative. See filtered data:
-![Electricity Price 0](Electricity%20Price%200%20in%20Oct-Nov.jpg)
+![Electricity Price 0](visuals/Electricity%20Price%200%20in%20Oct-Nov.jpg)
 
 
 Average Heat-Pump Power vs Outdoor Temperature (5°C bins).
 Answers Q1 and Q2 — “How much energy does the AC need at different outdoor temperatures?”
 
-![Power vs Outdoor](average-heat-pump-power-vs-outdoor-temperature-5-c-bins.jpg)
+![Power vs Outdoor](visuals/average-heat-pump-power-vs-outdoor-temperature-5-c-bins.jpg)
 
 Energy Cost vs Electricity Price Bucket.
 Answers Q3 — “How much do price fluctuations impact cost?”
 
-![Cost vs Bucket](how-much-do-price-fluctuations-impact-cost.jpg)
+![Cost vs Bucket](visuals/how-much-do-price-fluctuations-impact-cost.jpg)
 
 Energy Use vs Temp Difference (Indoor – Outdoor).
 Answers Q1 and Q5 — demonstrates heating physics (Temp Delta → Power usage).
 
-![Indoor vs Outdoor](energy-use-vs-temp-difference-indoor-outdoor.jpg)
-
----
-
-## 📚 References & Further Reading
-
-*Placeholder: Links to documentation, tutorials, and related resources.*
+![Indoor vs Outdoor](visuals/energy-use-vs-temp-difference-indoor-outdoor.jpg)
 
 ---
