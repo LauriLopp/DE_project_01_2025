@@ -12,7 +12,15 @@ This part of the project focuses on implementing data governance and visualizati
 
 ## 🚀 Project Overview
 
-*Placeholder: Brief description of the goals and scope for Part 3. Explain the role of each tool in the stack.*
+For Project 3 we added minio as the object storage for the data that is queried through API's. 
+Data pipeline in a simplified form:
+
+1. Elering Price API
+2. Minio with Iceberg to ensure rollbacks & consistent reads across snapshots
+3. Clickhouse as the main database
+4. Apache Superset to visualise data
+
+All data is still automated via Apache Airflow and DBT.
 
 ---
 
@@ -42,7 +50,9 @@ This part of the project focuses on implementing data governance and visualizati
 
 ## 📈 Visualization with Apache Superset
 
-*Placeholder: How dashboards and visualizations are created and managed in Superset.*
+For data visualisation, we connected Clickhouse to Apache Superset in the usual manner.
+For visualising our API data, we created a single dashboard. 
+
 
 ---
 
@@ -54,13 +64,43 @@ This part of the project focuses on implementing data governance and visualizati
 
 ## 🖼️ Screenshots & Visuals
 
-*Placeholder: Add screenshots or diagrams of the architecture, dashboards, and key UI elements.*
+Elering Price data in Minio
+![Elering Price Minio](elering_price_data_parquet_minio.png)
+
+Bronze Elering Price in Clickhouse through Minio/Iceberg
+![Elering Price Clickhouse](elering_price_clickhouse.png)
+
+Apache Superset Dashboard
+![Apache Superset Dashboard](dashboard_with_data.png)
 
 ---
 
 ## 📝 Example Queries & Dashboards
 
-*Placeholder: Example SQL queries and dashboard descriptions for analytics and reporting.*
+Dashboard & Chart descriptions
+
+Electricity price line-chart
+
+![Electricity Price](Electricity_price.jpg)
+
+In October and November we experienced "minus-price-day", where the price was negative. See filtered data:
+![Electricity Price 0](Electricity%20Price%200%20in%20Oct-Nov.jpg)
+
+
+Average Heat-Pump Power vs Outdoor Temperature (5°C bins).
+Answers Q1 and Q2 — “How much energy does the AC need at different outdoor temperatures?”
+
+![Power vs Outdoor](average-heat-pump-power-vs-outdoor-temperature-5-c-bins.jpg)
+
+Energy Cost vs Electricity Price Bucket.
+Answers Q3 — “How much do price fluctuations impact cost?”
+
+![Cost vs Bucket](how-much-do-price-fluctuations-impact-cost.jpg)
+
+Energy Use vs Temp Difference (Indoor – Outdoor).
+Answers Q1 and Q5 — demonstrates heating physics (Temp Delta → Power usage).
+
+![Indoor vs Outdoor](energy-use-vs-temp-difference-indoor-outdoor.jpg)
 
 ---
 
