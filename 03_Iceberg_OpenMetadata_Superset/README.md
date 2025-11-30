@@ -53,11 +53,11 @@ The file can be found from [Google Drive](https://drive.google.com/file/d/1_C8yH
 ## 🗄️ Data Governance with Apache Iceberg & OpenMetadata
 
 ### Example of added table and column descriptions for fact table 
-![OpenMetadata column descriptions](metadata_cols.png)
+![OpenMetadata column descriptions](visuals/metadata_cols.png)
 ### Integrated three tests for data quality:
 
 OpenMetaData tests
-<img width="2559" height="679" alt="image" src="https://github.com/user-attachments/assets/5d0b9cc1-bb4e-4286-8ab7-b1492333d58f" />
+![OpenMetaData tests](visuals/openmetadata_tests.png)
 
 
 ---
@@ -109,11 +109,13 @@ order by v.TimeKey desc
 LIMIT 10;
 ```
 ![Expected result](working_full_query.png)
+![Expected result](visuals/working_full_query.png)
 
 ```
 SELECT * from fact_heatin_energy_usage limit 10;
 ```
 ![Expected result](not_working_query.png)
+![Expected result](visuals/not_working_query.png)
 
 4. Run queries with limited analyst user
 ```
@@ -139,10 +141,12 @@ order by v.TimeKey desc
 LIMIT 10;
 ```
 ![Expected result](working_limited_query.png)
+![Expected result](visuals/working_limited_query.png)
 ```
 SELECT * from fact_heatin_energy_usage limit 10;
 ```
 ![Expected result](not_working_query.png)
+![Expected result](visuals/not_working_query.png)
 ---
 
 ## 📈 Visualization with Apache Superset
@@ -156,13 +160,13 @@ For visualising our API data, we created a single dashboard.
 ## 🖼️ Screenshots & Visuals
 
 Elering Price data in Minio
-![Elering Price Minio](elering_price_data_parquet_minio.png)
+![Elering Price Minio](visuals/elering_price_data_parquet_minio.png)
 
 Bronze Elering Price in Clickhouse through Minio/Iceberg
-![Elering Price Clickhouse](elering_price_clickhouse.png)
+![Elering Price Clickhouse](visuals/elering_price_clickhouse.png)
 
 Apache Superset Dashboard
-![Apache Superset Dashboard](dashboard_with_data.png)
+![Apache Superset Dashboard](visuals/dashboard_with_data.png)
 
 ---
 
@@ -172,25 +176,25 @@ Dashboard & Chart descriptions
 
 Electricity price line-chart
 
-![Electricity Price](Electricity_price.jpg)
+![Electricity Price](visuals/Electricity_price.jpg)
 
 In October and November we experienced "minus-price-day", where the price was negative. See filtered data:
-![Electricity Price 0](Electricity%20Price%200%20in%20Oct-Nov.jpg)
+![Electricity Price 0](visuals/Electricity%20Price%200%20in%20Oct-Nov.jpg)
 
 
 Average Heat-Pump Power vs Outdoor Temperature (5°C bins).
 Answers Q1 and Q2 — “How much energy does the AC need at different outdoor temperatures?”
 
-![Power vs Outdoor](average-heat-pump-power-vs-outdoor-temperature-5-c-bins.jpg)
+![Power vs Outdoor](visuals/average-heat-pump-power-vs-outdoor-temperature-5-c-bins.jpg)
 
 Energy Cost vs Electricity Price Bucket.
 Answers Q3 — “How much do price fluctuations impact cost?”
 
-![Cost vs Bucket](how-much-do-price-fluctuations-impact-cost.jpg)
+![Cost vs Bucket](visuals/how-much-do-price-fluctuations-impact-cost.jpg)
 
 Energy Use vs Temp Difference (Indoor – Outdoor).
 Answers Q1 and Q5 — demonstrates heating physics (Temp Delta → Power usage).
 
-![Indoor vs Outdoor](energy-use-vs-temp-difference-indoor-outdoor.jpg)
+![Indoor vs Outdoor](visuals/energy-use-vs-temp-difference-indoor-outdoor.jpg)
 
 ---
