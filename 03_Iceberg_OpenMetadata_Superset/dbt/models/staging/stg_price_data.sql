@@ -4,14 +4,7 @@
 	)
 }}
 
--- Staging: clean electricity price data
--- Source: MinIO/Iceberg via ClickHouse s3() view (bronze_elering_iceberg_readonly)
--- Requirements:
--- 1) Meaningful column names
--- 2) Consistently use local time (Europe/Tallinn) - already in bronze layer
--- 3) Consistently use a DateTime column named `timestamp`
--- 4) Numeric values as floats, convert EUR/MWh -> EUR/kWh
--- 5) Aggregate to hourly averages if granularity is higher than hour
+-- Converts EUR/MWh to EUR/kWh, aggregates to hourly
 
 WITH raw AS (
 	SELECT

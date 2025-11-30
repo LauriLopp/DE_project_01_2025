@@ -20,7 +20,6 @@ pgdata/
 *.pid
 *.seed
 *.bak
-*.zip
 
 # VS Code
 .vscode/
@@ -49,3 +48,7 @@ data/connections.json
 
 # Ignore exploration notebook (large/volatile)
 /01_Business_Brief_and_Star_Shema/iot_data_exploration.ipynb
+
+# Auto-generated at runtime (do not commit)
+/03_Iceberg_OpenMetadata_Superset/clickhouse-init/03_iceberg_table.sql
+/03_Iceberg_OpenMetadata_Superset/superset/dashboards/clean_assets/

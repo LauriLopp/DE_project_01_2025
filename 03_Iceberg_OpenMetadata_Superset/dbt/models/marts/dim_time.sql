@@ -8,8 +8,7 @@
   )
 }}
 
--- Gold-layer: DIM_TIME (sparse)
--- Build only the hours actually used across staging sources (IoT, weather, price)
+-- Sparse: only hours used across IoT, weather, price sources
 
 WITH needed_hours AS (
   SELECT toStartOfHour(hour_start) AS ts

@@ -1,7 +1,3 @@
-"""
-Backfill DAG - loads historical data for Superset.
-Trigger manually, then disable.
-"""
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
@@ -20,6 +16,45 @@ import pyarrow.parquet as pq
 MINIO_ENDPOINT = "http://minio:9000"
 MINIO_ACCESS_KEY = "minioadmin"
 MINIO_SECRET_KEY = "minioadmin"
+ICEBERG_WAREHOUSE = "s3://warehouse"
+ICEBERG_NAMESPACE = "bronze"
+ICEBERG_TABLE_NAME = "elering_price_iceberg"
+
+# PyIceberg REST Catalog configuration - uses the iceberg-rest service
+ICEBERG_CATALOG_CONFIG = {
+    "uri": "http://iceberg-rest:8181",
+    "s3.endpoint": MINIO_ENDPOINT,
+    "s3.access-key-id": MINIO_ACCESS_KEY,
+    "s3.secret-access-key": MINIO_SECRET_KEY,
+    "warehouse": ICEBERG_WAREHOUSE,
+}
+
+
+def ensure_minio_bucket():
+    """Ensure MinIO 'warehouse' bucket exists (creates if missing)."""
+    import boto3
+    from botocore.exceptions import ClientError
+    
+    s3 = boto3.client(
+        's3',
+        endpoint_url=MINIO_ENDPOINT,
+        aws_access_key_id=MINIO_ACCESS_KEY,
+        aws_secret_access_key=MINIO_SECRET_KEY,
+    )
+    
+    bucket_name = 'warehouse'
+    try:
+        s3.head_bucket(Bucket=bucket_name)
+        print(f"MinIO bucket '{bucket_name}' exists.")
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', '')
+        if error_code in ('404', 'NoSuchBucket'):
+            print(f"MinIO bucket '{bucket_name}' not found, creating...")
+            s3.create_bucket(Bucket=bucket_name)
+            print(f"Created MinIO bucket '{bucket_name}'.")
+        else:
+            raise
+
 
 # Backfill range - adjust as needed
 BACKFILL_START = datetime(2025, 10, 1, tzinfo=timezone.utc)
@@ -61,19 +96,18 @@ HA_WEATHER_ENTITY_ID = "weather.forecast_home"
 
 
 def _get_backfill_end():
-    """Calculate BACKFILL_END at runtime to avoid DAG parse-time issues.
-    
-    Returns the start of the previous hour to avoid overlap with continuous DAG.
-    E.g., if called at 14:45 UTC, returns 13:00 UTC.
-    """
+    """Returns start of previous hour (runtime) to avoid overlap with continuous DAG."""
     now = datetime.now(timezone.utc)
     return now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 
 
 def backfill_elering_to_iceberg(**context):
-    """Fetch historical Elering prices and write to MinIO as Parquet."""
-    import s3fs
-    import uuid
+    """IDEMPOTENT: Deletes existing data in backfill range, then appends fresh data."""
+    from pyiceberg.catalog import load_catalog
+    from pyiceberg.expressions import GreaterThanOrEqual, LessThan, And
+    
+    # Ensure MinIO bucket exists before any Iceberg operations
+    ensure_minio_bucket()
     
     backfill_end = _get_backfill_end()
     print(f"--- Backfilling Elering data from {BACKFILL_START} to {backfill_end} ---")
@@ -90,56 +124,67 @@ def backfill_elering_to_iceberg(**context):
         print("No Elering data returned")
         return
 
-    # Group by date for partitioning
-    records_by_date = {}
+    # Build lists for PyArrow table
+    ingestion_ts_list = []
+    ts_utc_list = []
+    zone_list = []
+    currency_list = []
+    price_list = []
+    
     ingestion_ts = datetime.utcnow()
     
     for rec in payload["data"].get("ee", []):
         ts_utc = datetime.utcfromtimestamp(rec["timestamp"])
-        date_key = ts_utc.strftime("%Y-%m-%d")
-        
-        if date_key not in records_by_date:
-            records_by_date[date_key] = {
-                "ingestion_ts": [], "ts_utc": [], "zone": [], 
-                "currency": [], "price_per_mwh": []
-            }
-        
-        records_by_date[date_key]["ingestion_ts"].append(ingestion_ts)
-        records_by_date[date_key]["ts_utc"].append(ts_utc)
-        records_by_date[date_key]["zone"].append("EE")
-        records_by_date[date_key]["currency"].append("EUR")
-        records_by_date[date_key]["price_per_mwh"].append(float(rec["price"]))
+        ingestion_ts_list.append(ingestion_ts)
+        ts_utc_list.append(ts_utc)
+        zone_list.append("EE")
+        currency_list.append("EUR")
+        price_list.append(float(rec["price"]))
 
-    # Write partitioned Parquet files to MinIO
-    fs = s3fs.S3FileSystem(
-        endpoint_url=MINIO_ENDPOINT,
-        key=MINIO_ACCESS_KEY,
-        secret=MINIO_SECRET_KEY,
-    )
+    if not ingestion_ts_list:
+        print("No Elering price records to write.")
+        return
 
-    total_records = 0
-    for date_key, data in records_by_date.items():
-        arrow_table = pa.table({
-            "ingestion_ts": pa.array(data["ingestion_ts"], type=pa.timestamp("us")),
-            "ts_utc": pa.array(data["ts_utc"], type=pa.timestamp("us")),
-            "zone": pa.array(data["zone"], type=pa.string()),
-            "currency": pa.array(data["currency"], type=pa.string()),
-            "price_per_mwh": pa.array(data["price_per_mwh"], type=pa.float64()),
-        })
-        
-        file_id = uuid.uuid4().hex[:8]
-        parquet_path = f"warehouse/bronze/elering_price_iceberg/data/price_date={date_key}/backfill_{file_id}.parquet"
-        
-        with fs.open(parquet_path, 'wb') as f:
-            pq.write_table(arrow_table, f)
-        
-        total_records += len(data["ts_utc"])
+    # Create PyArrow table
+    arrow_table = pa.table({
+        "ingestion_ts": pa.array(ingestion_ts_list, type=pa.timestamp("us")),
+        "ts_utc": pa.array(ts_utc_list, type=pa.timestamp("us")),
+        "zone": pa.array(zone_list, type=pa.string()),
+        "currency": pa.array(currency_list, type=pa.string()),
+        "price_per_mwh": pa.array(price_list, type=pa.float64()),
+    })
 
-    print(f"✅ Backfilled {total_records} Elering price records across {len(records_by_date)} days")
+    # Connect to Iceberg catalog and write data
+    print("Connecting to Iceberg REST catalog...")
+    catalog = load_catalog("rest", **ICEBERG_CATALOG_CONFIG)
+    table_identifier = f"{ICEBERG_NAMESPACE}.{ICEBERG_TABLE_NAME}"
+    
+    try:
+        table = catalog.load_table(table_identifier)
+        
+        # IDEMPOTENCY: Delete existing data in backfill range before inserting
+        start_ts = BACKFILL_START.replace(tzinfo=None)
+        end_ts = backfill_end.replace(tzinfo=None) if backfill_end.tzinfo else backfill_end
+        
+        try:
+            delete_filter = And(
+                GreaterThanOrEqual("ts_utc", start_ts),
+                LessThan("ts_utc", end_ts)
+            )
+            table.delete(delete_filter)
+            print(f"Deleted existing Iceberg data for backfill range {start_ts} to {end_ts}")
+        except Exception as e:
+            print(f"Delete step skipped (table may be empty): {e}")
+        
+        table.append(arrow_table)
+        print(f"✅ Backfilled {len(ingestion_ts_list)} Elering price records to Iceberg table: {table_identifier}")
+    except Exception as e:
+        print(f"⚠️ Error writing to Iceberg table: {e}")
+        print("  Table may need to be created first by the continuous DAG's setup_iceberg_catalog task")
+        raise
 
 
 def backfill_iot_from_statistics(**context):
-    """Fetch IoT stats via HA WebSocket API, fallback to REST if unavailable."""
     backfill_end = _get_backfill_end()
     print(f"--- Backfilling IoT data from {BACKFILL_START} to {backfill_end} using WebSocket Statistics API ---")
     
@@ -148,11 +193,6 @@ def backfill_iot_from_statistics(**context):
 
 
 async def _backfill_iot_websocket(backfill_end):
-    """Async WebSocket fetch for HA long-term statistics.
-    
-    Args:
-        backfill_end: The end datetime for the backfill period (calculated at runtime).
-    """
     from airflow.providers.http.hooks.http import HttpHook
     
     # Get HA connection details from Airflow
@@ -334,13 +374,7 @@ async def _backfill_iot_websocket(backfill_end):
 
 
 def _backfill_iot_chunked_sync(ch_conn, token, backfill_end):
-    """Fallback: fetch IoT data via REST API in daily chunks (limited to ~10 days by HA).
-    
-    Args:
-        ch_conn: ClickHouse connection.
-        token: Home Assistant API token.
-        backfill_end: The end datetime for the backfill period (calculated at runtime).
-    """
+    """Fallback: REST API in daily chunks (HA limits to ~10 days)."""
     from airflow.providers.http.hooks.http import HttpHook
     
     # Validate token before proceeding
@@ -416,8 +450,6 @@ def _backfill_iot_chunked_sync(ch_conn, token, backfill_end):
 
 
 def backfill_weather_from_openmeteo(**context):
-    """Fetch weather history from Open-Meteo API. UV index estimated from radiation."""
-    # Calculate BACKFILL_END at runtime to avoid DAG parse-time issues
     backfill_end = _get_backfill_end()
     actual_end = backfill_end.replace(tzinfo=None)
     
@@ -545,10 +577,10 @@ def backfill_weather_from_openmeteo(**context):
 
 
 def refresh_clickhouse_iceberg_view(**context):
-    """Refresh ClickHouse view for Iceberg data."""
     ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
     
-    ch_conn.execute("""
+    # Try using the native iceberg() function first (reads Iceberg metadata)
+    iceberg_view_sql = f"""
         CREATE OR REPLACE VIEW default.bronze_elering_iceberg_readonly AS
         SELECT 
             ingestion_ts,
@@ -556,16 +588,66 @@ def refresh_clickhouse_iceberg_view(**context):
             zone,
             currency,
             price_per_mwh
-        FROM s3(
-            'http://minio:9000/warehouse/bronze/elering_price_iceberg/data/**/*.parquet',
+        FROM iceberg(
+            'http://minio:9000/warehouse/{ICEBERG_NAMESPACE}/{ICEBERG_TABLE_NAME}/',
             'minioadmin',
-            'minioadmin',
-            'Parquet'
+            'minioadmin'
         )
-    """)
+    """
     
-    result = ch_conn.execute("SELECT count() FROM bronze_elering_iceberg_readonly")
-    print(f"✅ View refreshed. Total Elering records: {result[0][0]}")
+    try:
+        ch_conn.execute(iceberg_view_sql)
+        print("Created/updated ClickHouse view using iceberg() function.")
+    except Exception as e:
+        print(f"iceberg() function failed: {e}")
+        print("Falling back to s3() with explicit schema (for empty or new tables)...")
+        
+        # Fallback: Use s3() with explicit schema definition
+        # This handles the case where no parquet files exist yet
+        fallback_sql = f"""
+            CREATE OR REPLACE VIEW default.bronze_elering_iceberg_readonly AS
+            SELECT 
+                ingestion_ts,
+                ts_utc,
+                zone,
+                currency,
+                price_per_mwh
+            FROM s3(
+                'http://minio:9000/warehouse/{ICEBERG_NAMESPACE}/{ICEBERG_TABLE_NAME}/data/**/*.parquet',
+                'minioadmin',
+                'minioadmin',
+                'Parquet',
+                'ingestion_ts Nullable(DateTime64(6)), ts_utc Nullable(DateTime64(6)), zone Nullable(String), currency Nullable(String), price_per_mwh Nullable(Float64)'
+            )
+            WHERE _file != ''
+        """
+        
+        try:
+            ch_conn.execute(fallback_sql)
+            print("Created ClickHouse view using s3() with explicit schema.")
+        except Exception as e2:
+            # If even that fails (no files at all), create an empty view
+            print(f"s3() fallback also failed: {e2}")
+            print("Creating empty placeholder view...")
+            empty_view_sql = """
+                CREATE OR REPLACE VIEW default.bronze_elering_iceberg_readonly AS
+                SELECT 
+                    toDateTime64('1970-01-01 00:00:00', 6) AS ingestion_ts,
+                    toDateTime64('1970-01-01 00:00:00', 6) AS ts_utc,
+                    '' AS zone,
+                    '' AS currency,
+                    0.0 AS price_per_mwh
+                WHERE 0
+            """
+            ch_conn.execute(empty_view_sql)
+            print("Created empty placeholder view. Run backfill_elering first to populate data.")
+            return
+    
+    try:
+        result = ch_conn.execute("SELECT count() FROM bronze_elering_iceberg_readonly")
+        print(f"✅ View refreshed. Total Elering records: {result[0][0]}")
+    except Exception as e:
+        print(f"View created but count query failed: {e}")
 
 
 # --- DAG Definition ---
