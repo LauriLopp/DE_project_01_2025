@@ -52,7 +52,7 @@ All data is still automated via Apache Airflow and DBT.
 
 For data visualisation, we connected Clickhouse to Apache Superset in the usual manner.
 For visualising our API data, we created a single dashboard. See the screenchot below of the data:
-![Apache Superset Dashboard](images/architecture.png)
+![Apache Superset Dashboard](dashboard_with_data.png)
 
 ---
 
