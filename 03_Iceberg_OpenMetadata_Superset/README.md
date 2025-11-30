@@ -63,10 +63,12 @@ For visualising our API data, we created a single dashboard.
 ---
 
 ## 🖼️ Screenshots & Visuals
-Elering Price data in Minio
 
+Elering Price data in Minio
+![Elering Price Minio](elering_price_data_parquet_minio.png)
 
 Bronze Elering Price in Clickhouse through Minio/Iceberg
+![Elering Price Clickhouse](elering_price_clickhouse.png)
 
 Apache Superset Dashboard
 ![Apache Superset Dashboard](dashboard_with_data.png)
