@@ -80,18 +80,26 @@ Apache Superset Dashboard
 Dashboard & Chart descriptions
 
 Electricity price line-chart
+
 ![Electricity Price](Electricity_price.jpg)
+
+In October and November we experienced "minus-price-day", where the price was negative. See filtered data:
+![Electricity Price 0](Electricity%20Price%200%20in%20Oct-Nov.jpg)
+
 
 Average Heat-Pump Power vs Outdoor Temperature (5°C bins).
 Answers Q1 and Q2 — “How much energy does the AC need at different outdoor temperatures?”
+
 ![Power vs Outdoor](average-heat-pump-power-vs-outdoor-temperature-5-c-bins.jpg)
 
 Energy Cost vs Electricity Price Bucket.
 Answers Q3 — “How much do price fluctuations impact cost?”
+
 ![Cost vs Bucket](how-much-do-price-fluctuations-impact-cost.jpg)
 
 Energy Use vs Temp Difference (Indoor – Outdoor).
 Answers Q1 and Q5 — demonstrates heating physics (Temp Delta → Power usage).
+
 ![Indoor vs Outdoor](energy-use-vs-temp-difference-indoor-outdoor.jpg)
 
 ---
