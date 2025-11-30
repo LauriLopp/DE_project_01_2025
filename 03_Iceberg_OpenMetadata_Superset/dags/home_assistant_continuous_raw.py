@@ -484,7 +484,64 @@ OPENMETADATA_CONFIG = {
             "description": "Ensures ASHP_Power values are within realistic range (0 to 10000 watts)",
             "parameters": [{"name": "minValue", "value": "0"}, {"name": "maxValue", "value": "10000"}]
         }
-    ]
+    ],
+    "column_descriptions": {
+        "dim_device": {
+            "DeviceKey": "Surrogate key for device",
+            "Brand": "Device brand",
+            "Model": "Device model",
+            "MinPower": "Minimum power (W, >=0)",
+            "InstallationDate": "Installation date",
+            "ValidTo": "Validity end date (default '9999-12-31')",
+        },
+        "dim_location": {
+            "LocationKey": "Surrogate key for location",
+            "DeviceLocation": "Location of the device",
+            "ClosestWeatherStation": "Closest weather station",
+            "PricingRegion": "Pricing region",
+            "ValidFrom": "Start of validity",
+            "ValidTo": "End of validity (default '9999-12-31')",
+        },
+        "dim_time": {
+            "TimeKey": "Surrogate key for time",
+            "FullDate": "Date component",
+            "Year": "Year (>=2000)",
+            "Month": "Month (1-12)",
+            "Day": "Day of month (1-31)",
+            "DayOfWeek": "Day of week (1-7)",
+            "HourOfDay": "Hour of day (0-23)",
+            "Season": "Season name (Winter, Spring, Summer, Autumn)",
+            "IsHoliday": "Holiday flag (0/1)",
+            "IsWeekend": "Weekend flag (0/1)",
+            "IsPeakHour": "Peak hour flag (0/1)",
+        },
+        "fact_heating_energy_usage": {
+            "FactKey": "Unique row identifier",
+            "TimeKey": "Foreign key to time dimension",
+            "DeviceKey": "Foreign key to device dimension",
+            "LocationKey": "Foreign key to location dimension",
+            "ElectricityPrice": "Electricity price at the time (EUR/kWh)",
+            "ASHP_Power": "Power consumption of ASHP system (W)",
+            "Boiler_Power": "Power consumption of the boiler (W)",
+            "Air_Drier_Power": "Power consumption of air drier (W)",
+            "Boiler_Voltage": "Boiler voltage (V)",
+            "IndoorTemp": "Indoor temperature (°C)",
+            "IndoorHumidityPerc": "Indoor humidity percentage (%)",
+            "IndoorHumidityAbs": "Indoor absolute humidity (g/m³)",
+            "WC_HumidityAbs": "WC absolute humidity (g/m³)",
+            "WC_Temp": "WC temperature (°C)",
+            "OutdoorTemp": "Outdoor temperature (°C)",
+            "DewPoint": "Calculated dew point (°C)",
+            "OutdoorHumidityPerc": "Outdoor humidity percentage (%)",
+            "CloudCoverage": "Cloud coverage percentage (%)",
+            "UV_Index": "UV index level",
+            "AirPressure_mmHg": "Air pressure in millimeters of mercury (mmHg)",
+            "WindDir": "Wind direction (degrees, 0-360)",
+            "WindGustSpeed_ms": "Wind gust speed (m/s)",
+            "WindSpeed_ms": "Average wind speed (m/s)",
+            "WeatherCondition": "Weather condition description",
+        },
+    }
 }
 
 
@@ -621,6 +678,37 @@ def sync_openmetadata(**context):
                     print(f"  Updated: {table_name}")
                 else:
                     print(f"  Warning: Failed to update {table_name}: {patch_resp.status_code}")
+            else:
+                print(f"  Warning: Table not found: {table_name}")
+        
+        # Step 3b: Add column descriptions
+        print("Updating column descriptions...")
+        for table_name, columns in OPENMETADATA_CONFIG.get("column_descriptions", {}).items():
+            fqn = f"{CLICKHOUSE_SERVICE_NAME}.default.default.{table_name}"
+            # Fetch table with columns
+            table_resp = api_get(token, f"tables/name/{fqn}?fields=columns")
+            if table_resp.status_code == 200:
+                table_data = table_resp.json()
+                table_id = table_data.get("id")
+                existing_columns = table_data.get("columns", [])
+                
+                # Build column index map
+                col_index_map = {col["name"]: i for i, col in enumerate(existing_columns)}
+                
+                # Apply descriptions
+                updated_count = 0
+                for col_name, col_desc in columns.items():
+                    if col_name in col_index_map:
+                        idx = col_index_map[col_name]
+                        patch_data = [{"op": "add", "path": f"/columns/{idx}/description", "value": col_desc}]
+                        patch_resp = api_patch(token, f"tables/{table_id}", patch_data)
+                        if patch_resp.status_code in (200, 201):
+                            updated_count += 1
+                        else:
+                            print(f"    Warning: Failed to update {table_name}.{col_name}")
+                    else:
+                        print(f"    Warning: Column {col_name} not found in {table_name}")
+                print(f"  {table_name}: {updated_count}/{len(columns)} columns updated")
             else:
                 print(f"  Warning: Table not found: {table_name}")
         
