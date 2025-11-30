@@ -87,6 +87,10 @@ Bronze Elering Price in Clickhouse through Minio/Iceberg
 Apache Superset Dashboard
 ![Apache Superset Dashboard](dashboard_with_data.png)
 
+OpenMetaData tests
+<img width="2559" height="679" alt="image" src="https://github.com/user-attachments/assets/5d0b9cc1-bb4e-4286-8ab7-b1492333d58f" />
+
+
 ---
 
 ## 📝 Example Queries & Dashboards
