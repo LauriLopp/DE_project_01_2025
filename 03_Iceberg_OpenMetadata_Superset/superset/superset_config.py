@@ -1,20 +1,7 @@
-"""
-Superset Configuration File
-"""
 import os
 
-# Superset specific config
 ROW_LIMIT = 5000
-
-# Flask App Builder configuration
-# Your App secret key will be used for securely signing the session cookie
-# and encrypting sensitive information on the database
-# Make sure you are changing this key for your deployment with a strong key.
 SECRET_KEY = os.environ.get("SUPERSET_SECRET_KEY", "supersecretkey")
-
-# The SQLAlchemy connection string to your database backend
-# This connection defines the path to the database that stores your
-# superset metadata (slices, connections, tables, dashboards, ...).
 SQLALCHEMY_DATABASE_URI = os.environ.get(
     "SUPERSET_SQLALCHEMY_DATABASE_URI",
     "postgresql://superset:superset@superset-db:5432/superset"

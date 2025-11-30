@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""
-fix_import_zip.py
-
-Cleans up a Superset dashboard export ZIP file by:
-1. Removing __MACOSX/ folders (Mac OS X resource forks)
-2. Removing .DS_Store files
-3. Flattening nested folder structure (e.g., superset_assets/ -> root)
-
-Extracts to a clean directory for use with `superset import-directory`.
-"""
+"""Cleans Mac artifacts from Superset export ZIPs and flattens nested folders."""
 
 import zipfile
 import os
@@ -17,16 +8,7 @@ import shutil
 
 
 def fix_superset_zip(input_path: str, output_dir: str) -> bool:
-    """
-    Read input ZIP, clean it, and extract to output directory.
-    
-    Args:
-        input_path: Path to the original (polluted) ZIP file
-        output_dir: Path to extract the cleaned files
-    
-    Returns:
-        True if successful, False otherwise
-    """
+    """Extract ZIP to output_dir, removing Mac artifacts and flattening nested folders."""
     if not os.path.exists(input_path):
         print(f"ERROR: Input file not found: {input_path}")
         return False

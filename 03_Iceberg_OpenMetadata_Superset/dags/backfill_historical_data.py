@@ -1,7 +1,3 @@
-"""
-Backfill DAG - loads historical data for Superset.
-Trigger manually, then disable.
-"""
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
@@ -35,11 +31,7 @@ ICEBERG_CATALOG_CONFIG = {
 
 
 def ensure_minio_bucket():
-    """Create MinIO warehouse bucket if it doesn't exist.
-    
-    This is a self-healing fallback in case the createbuckets init container
-    failed or the bucket was deleted after a volume reset.
-    """
+    """Ensure MinIO 'warehouse' bucket exists (creates if missing)."""
     import boto3
     from botocore.exceptions import ClientError
     
@@ -104,20 +96,13 @@ HA_WEATHER_ENTITY_ID = "weather.forecast_home"
 
 
 def _get_backfill_end():
-    """Calculate BACKFILL_END at runtime to avoid DAG parse-time issues.
-    
-    Returns the start of the previous hour to avoid overlap with continuous DAG.
-    E.g., if called at 14:45 UTC, returns 13:00 UTC.
-    """
+    """Returns start of previous hour (runtime) to avoid overlap with continuous DAG."""
     now = datetime.now(timezone.utc)
     return now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 
 
 def backfill_elering_to_iceberg(**context):
-    """Fetch historical Elering prices and write to Iceberg table using PyIceberg REST catalog.
-    
-    IDEMPOTENT: Deletes existing data in the backfill range before inserting.
-    """
+    """IDEMPOTENT: Deletes existing data in backfill range, then appends fresh data."""
     from pyiceberg.catalog import load_catalog
     from pyiceberg.expressions import GreaterThanOrEqual, LessThan, And
     
@@ -200,7 +185,6 @@ def backfill_elering_to_iceberg(**context):
 
 
 def backfill_iot_from_statistics(**context):
-    """Fetch IoT stats via HA WebSocket API, fallback to REST if unavailable."""
     backfill_end = _get_backfill_end()
     print(f"--- Backfilling IoT data from {BACKFILL_START} to {backfill_end} using WebSocket Statistics API ---")
     
@@ -209,11 +193,6 @@ def backfill_iot_from_statistics(**context):
 
 
 async def _backfill_iot_websocket(backfill_end):
-    """Async WebSocket fetch for HA long-term statistics.
-    
-    Args:
-        backfill_end: The end datetime for the backfill period (calculated at runtime).
-    """
     from airflow.providers.http.hooks.http import HttpHook
     
     # Get HA connection details from Airflow
@@ -395,13 +374,7 @@ async def _backfill_iot_websocket(backfill_end):
 
 
 def _backfill_iot_chunked_sync(ch_conn, token, backfill_end):
-    """Fallback: fetch IoT data via REST API in daily chunks (limited to ~10 days by HA).
-    
-    Args:
-        ch_conn: ClickHouse connection.
-        token: Home Assistant API token.
-        backfill_end: The end datetime for the backfill period (calculated at runtime).
-    """
+    """Fallback: REST API in daily chunks (HA limits to ~10 days)."""
     from airflow.providers.http.hooks.http import HttpHook
     
     # Validate token before proceeding
@@ -477,8 +450,6 @@ def _backfill_iot_chunked_sync(ch_conn, token, backfill_end):
 
 
 def backfill_weather_from_openmeteo(**context):
-    """Fetch weather history from Open-Meteo API. UV index estimated from radiation."""
-    # Calculate BACKFILL_END at runtime to avoid DAG parse-time issues
     backfill_end = _get_backfill_end()
     actual_end = backfill_end.replace(tzinfo=None)
     
@@ -606,11 +577,6 @@ def backfill_weather_from_openmeteo(**context):
 
 
 def refresh_clickhouse_iceberg_view(**context):
-    """Refresh ClickHouse view to query Iceberg data from MinIO.
-    
-    Uses Iceberg table function first, falls back to s3() with explicit schema
-    if no data exists yet.
-    """
     ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
     
     # Try using the native iceberg() function first (reads Iceberg metadata)

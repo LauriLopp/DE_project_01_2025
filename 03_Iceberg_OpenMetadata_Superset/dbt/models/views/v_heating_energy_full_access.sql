@@ -1,5 +1,3 @@
-
-
 {{ config(
     materialized='view',
     sql_security='DEFINER',

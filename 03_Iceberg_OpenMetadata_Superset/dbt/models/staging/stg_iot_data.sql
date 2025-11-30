@@ -4,8 +4,6 @@
 	)
 }}
 
--- Pivot IoT readings to hourly averages per sensor
-
 WITH base AS (
 	SELECT
 		-- Properly convert from UTC to Tallinn (last_changed is stored as UTC)

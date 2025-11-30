@@ -6,6 +6,9 @@ from airflow.providers.http.hooks.http import HttpHook
 from datetime import datetime, timezone
 import os
 import json
+import requests
+import base64
+import time
 import pyarrow as pa
 
 DBT_PROJECT_DIR = "/opt/airflow/dbt"
@@ -53,7 +56,6 @@ HA_WEATHER_ENTITY_ID = "weather.forecast_home"
 # --- DATABASE SETUP TASKS ---
 
 def setup_bronze_iot_table():
-    """Creates the table for raw Home Assistant IoT sensor data."""
     ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
     ch_conn.execute("""
         CREATE TABLE IF NOT EXISTS bronze_iot_raw_data (
@@ -70,7 +72,6 @@ def setup_bronze_iot_table():
 # The ClickHouse view bronze_elering_iceberg_readonly reads from MinIO Parquet files
 
 def setup_bronze_weather_table():
-    """Create bronze_weather_history table if not exists."""
     ch_conn = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
     ch_conn.execute("""
         CREATE TABLE IF NOT EXISTS bronze_weather_history (
@@ -106,11 +107,7 @@ ICEBERG_CATALOG_CONFIG = {
 
 
 def ensure_minio_bucket():
-    """Create MinIO warehouse bucket if it doesn't exist.
-    
-    This is a self-healing fallback in case the createbuckets init container
-    failed or the bucket was deleted after a volume reset.
-    """
+    """Ensure MinIO 'warehouse' bucket exists (creates if missing)."""
     import boto3
     from botocore.exceptions import ClientError
     
@@ -136,12 +133,12 @@ def ensure_minio_bucket():
 
 
 def setup_iceberg_catalog():
-    """Initialize Iceberg catalog and create namespace/table if needed."""
     from pyiceberg.catalog import load_catalog
     from pyiceberg.schema import Schema
     from pyiceberg.types import TimestampType, StringType, DoubleType, NestedField
-    from pyiceberg.partitioning import PartitionSpec, PartitionField
+    from pyiceberg.partitioning import PartitionSpec
     from pyiceberg.transforms import DayTransform
+    from pyiceberg.exceptions import NoSuchTableError
     
     # Ensure MinIO bucket exists before any Iceberg operations
     ensure_minio_bucket()
@@ -160,11 +157,13 @@ def setup_iceberg_catalog():
     # Define Iceberg schema for Elering price data
     table_identifier = f"{ICEBERG_NAMESPACE}.{ICEBERG_TABLE_NAME}"
     
-    try:
-        table = catalog.load_table(table_identifier)
+    # Check if table exists by listing tables in the namespace
+    existing_tables = [t[1] for t in catalog.list_tables(ICEBERG_NAMESPACE)]
+    if ICEBERG_TABLE_NAME in existing_tables:
         print(f"Table already exists: {table_identifier}")
-    except Exception:
+    else:
         # Create new table with proper Iceberg schema
+        from pyiceberg.partitioning import PartitionField
         schema = Schema(
             NestedField(1, "ingestion_ts", TimestampType(), required=False),
             NestedField(2, "ts_utc", TimestampType(), required=False),
@@ -178,7 +177,7 @@ def setup_iceberg_catalog():
             PartitionField(source_id=2, field_id=1000, transform=DayTransform(), name="ts_day")
         )
         
-        table = catalog.create_table(
+        catalog.create_table(
             identifier=table_identifier,
             schema=schema,
             partition_spec=partition_spec,
@@ -190,11 +189,7 @@ def setup_iceberg_catalog():
 
 
 def write_elering_to_iceberg(**context):
-    """Fetch Elering prices and write to Iceberg table using PyIceberg REST catalog.
-    
-    IDEMPOTENT: Uses delete + append pattern to avoid duplicates on re-runs.
-    Deletes rows matching the time interval before appending new data.
-    """
+    """IDEMPOTENT: Deletes existing rows for the interval, then appends fresh data."""
     from pyiceberg.catalog import load_catalog
     from pyiceberg.expressions import GreaterThanOrEqual, LessThan, And
     
@@ -271,7 +266,6 @@ def write_elering_to_iceberg(**context):
 
 
 def create_clickhouse_iceberg_view(**context):
-    """Create ClickHouse view to query Elering data from Iceberg table in MinIO."""
     ch_hook = ClickHouseHook(clickhouse_conn_id="clickhouse_default")
     ch_conn = ch_hook.get_conn()
     
@@ -318,9 +312,6 @@ def create_clickhouse_iceberg_view(**context):
         ch_conn.execute(fallback_sql)
         print("Created/updated ClickHouse view using s3() fallback: bronze_elering_iceberg_readonly")
     
-    ch_conn.execute(create_view_sql)
-    print("Created/updated ClickHouse view: bronze_elering_iceberg_readonly")
-    
     # Verify the view works by counting rows
     try:
         result = ch_conn.execute("SELECT count() FROM bronze_elering_iceberg_readonly")
@@ -333,10 +324,7 @@ def create_clickhouse_iceberg_view(**context):
 # --- DATA FETCHING TASKS ---
 
 def fetch_iot_history(**context):
-    """Fetches history for IoT SENSORS and loads into bronze_iot_raw_data.
-    
-    IDEMPOTENT: Deletes existing data for the time interval before inserting.
-    """
+    """IDEMPOTENT: Deletes existing rows for the interval, then inserts fresh data."""
     start_dt = context["data_interval_start"]
     end_dt = context["data_interval_end"]
     print(f"--- IoT Ingestion: Fetching data from {start_dt.isoformat()} to {end_dt.isoformat()} ---")
@@ -373,10 +361,7 @@ def fetch_iot_history(**context):
 # NOTE: fetch_elering_history removed - Elering data now written directly to Iceberg via write_elering_to_iceberg
 
 def fetch_weather_history(**context):
-    """Fetches history for the WEATHER entity and loads into bronze_weather_history.
-    
-    IDEMPOTENT: Deletes existing data for the time interval before inserting.
-    """
+    """IDEMPOTENT: Deletes existing rows for the interval, then inserts fresh data."""
     start_dt = context["data_interval_start"]
     end_dt = context["data_interval_end"]
     print(f"--- Weather Ingestion: Fetching data from {start_dt.isoformat()} to {end_dt.isoformat()} ---")
@@ -427,11 +412,7 @@ def fetch_weather_history(**context):
 
 # --- DAG DEFINITION ---
 def create_device_and_location_tables():
-    """
-    Create and load static bronze_device and bronze_location tables from CSVs.
-    
-    IDEMPOTENT: Uses DROP + CREATE pattern to ensure CSV changes are reflected.
-    """
+    """IDEMPOTENT: Drops and recreates tables from CSVs to pick up changes."""
     ch = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
 
     # Drop and recreate to pick up any CSV changes
@@ -460,6 +441,283 @@ def create_device_and_location_tables():
     ch.execute(sql_location)
 
     print("Loaded bronze_device and bronze_location from CSVs into schema (tables recreated).")
+
+
+# --- OPENMETADATA SYNC TASK ---
+# Configuration for OpenMetadata API
+OPENMETADATA_URL = "http://openmetadata-server:8585"
+OPENMETADATA_ADMIN_EMAIL = "admin@open-metadata.org"
+OPENMETADATA_ADMIN_PASSWORD = "admin"
+CLICKHOUSE_SERVICE_NAME = "clickhouse_gold"
+
+# Table descriptions and test definitions
+OPENMETADATA_CONFIG = {
+    "table_descriptions": {
+        "dim_device": "Device dimension table containing IoT sensor information including device names, types, and manufacturers for the ASHP monitoring system.",
+        "dim_location": "Location dimension table containing geographic information for sensor locations including city, country, climate zone, and coordinates.",
+        "dim_time": "Time dimension table with hourly granularity containing date attributes, day of week, holidays, and time-based analytics support.",
+        "fact_heating_energy_usage": "Central fact table containing hourly ASHP performance metrics including power consumption, temperatures, electricity prices, weather data, and calculated COP values.",
+    },
+    "test_cases": [
+        {
+            "table": "fact_heating_energy_usage",
+            "column": "TimeKey",
+            "test_type": "columnValuesToBeNotNull",
+            "name": "timekey_not_null",
+            "display_name": "TimeKey Not Null",
+            "description": "Ensures TimeKey is never null (required for time dimension join)"
+        },
+        {
+            "table": "dim_device",
+            "column": "DeviceKey",
+            "test_type": "columnValuesToBeUnique",
+            "name": "devicekey_unique",
+            "display_name": "DeviceKey Unique",
+            "description": "Ensures DeviceKey is unique in the device dimension table"
+        },
+        {
+            "table": "fact_heating_energy_usage",
+            "column": "ASHP_Power",
+            "test_type": "columnValuesToBeBetween",
+            "name": "ashp_power_range",
+            "display_name": "ASHP Power Valid Range",
+            "description": "Ensures ASHP_Power values are within realistic range (0 to 10000 watts)",
+            "parameters": [{"name": "minValue", "value": "0"}, {"name": "maxValue", "value": "10000"}]
+        }
+    ]
+}
+
+
+def sync_openmetadata(**context):
+    """
+    IDEMPOTENT: Syncs metadata to OpenMetadata after dbt completes.
+    
+    This task:
+    1. Triggers metadata ingestion to discover/refresh all tables
+    2. Waits for ingestion to complete
+    3. Adds/updates table descriptions
+    4. Creates data quality tests (if not exist)
+    5. Triggers test suite execution
+    """
+    print("=" * 60)
+    print("OpenMetadata Sync - Phase 2 (After dbt)")
+    print("=" * 60)
+    
+    # --- Helper Functions ---
+    def get_token():
+        """Get JWT token from OpenMetadata."""
+        password_b64 = base64.b64encode(OPENMETADATA_ADMIN_PASSWORD.encode()).decode()
+        resp = requests.post(
+            f"{OPENMETADATA_URL}/api/v1/users/login",
+            json={"email": OPENMETADATA_ADMIN_EMAIL, "password": password_b64},
+            headers={"Content-Type": "application/json"},
+            timeout=30
+        )
+        if resp.status_code == 200:
+            return resp.json().get("accessToken")
+        raise Exception(f"Auth failed: {resp.status_code} - {resp.text}")
+    
+    def api_get(token, endpoint):
+        """GET request to OpenMetadata API."""
+        return requests.get(
+            f"{OPENMETADATA_URL}/api/v1/{endpoint}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30
+        )
+    
+    def api_post(token, endpoint, data):
+        """POST request to OpenMetadata API."""
+        return requests.post(
+            f"{OPENMETADATA_URL}/api/v1/{endpoint}",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=data,
+            timeout=60
+        )
+    
+    def api_patch(token, endpoint, data):
+        """PATCH request to OpenMetadata API."""
+        return requests.patch(
+            f"{OPENMETADATA_URL}/api/v1/{endpoint}",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json-patch+json"},
+            json=data,
+            timeout=30
+        )
+    
+    # --- Main Logic ---
+    try:
+        # Step 1: Authenticate
+        print("Authenticating with OpenMetadata...")
+        token = get_token()
+        print("Authentication successful")
+        
+        # Step 2: Find and trigger metadata ingestion pipeline
+        print("Looking for metadata ingestion pipeline...")
+        pipelines_resp = api_get(token, f"services/ingestionPipelines?service={CLICKHOUSE_SERVICE_NAME}&pipelineType=metadata")
+        if pipelines_resp.status_code != 200:
+            print(f"Warning: Could not fetch pipelines: {pipelines_resp.status_code}")
+        else:
+            pipelines = pipelines_resp.json().get("data", [])
+            if pipelines:
+                pipeline_id = pipelines[0].get("id")
+                pipeline_name = pipelines[0].get("name")
+                deployed = pipelines[0].get("deployed", False)
+                
+                # Ensure pipeline is deployed first
+                if not deployed:
+                    print(f"Pipeline not deployed, deploying: {pipeline_name}")
+                    deploy_resp = api_post(token, f"services/ingestionPipelines/deploy/{pipeline_id}", {})
+                    if deploy_resp.status_code in (200, 201):
+                        print("Pipeline deployed successfully")
+                    else:
+                        print(f"Warning: Deploy failed: {deploy_resp.status_code}")
+                
+                print(f"Triggering ingestion pipeline: {pipeline_name}")
+                
+                # Trigger the pipeline (may fail with 400 if already running - that's OK)
+                trigger_resp = api_post(token, f"services/ingestionPipelines/trigger/{pipeline_id}", {})
+                if trigger_resp.status_code in (200, 201):
+                    print("Ingestion triggered successfully")
+                elif trigger_resp.status_code == 400:
+                    print("Ingestion already running - will wait for it")
+                else:
+                    print(f"Warning: Trigger failed: {trigger_resp.status_code}")
+                
+                # Wait for ingestion to complete (up to 90 seconds)
+                print("Waiting for ingestion to complete...")
+                for i in range(18):  # 18 * 5s = 90 seconds max
+                    time.sleep(5)
+                    status_resp = api_get(token, f"services/ingestionPipelines/{pipeline_id}")
+                    if status_resp.status_code == 200:
+                        pipeline_data = status_resp.json()
+                        # Check pipelineStatuses - it can be a dict with runId and pipelineState
+                        statuses = pipeline_data.get("pipelineStatuses")
+                        if isinstance(statuses, dict):
+                            state = statuses.get("pipelineState")
+                        elif isinstance(statuses, list) and statuses:
+                            state = statuses[0].get("pipelineState")
+                        else:
+                            state = None
+                        
+                        if state in ("success", "failed", "partialSuccess"):
+                            print(f"Ingestion completed: {state}")
+                            break
+                        elif i % 3 == 0:  # Log every 15 seconds
+                            print(f"  Still waiting... (state: {state or 'running'})")
+                else:
+                    print("Ingestion timeout (90s) - proceeding anyway")
+            else:
+                print("No metadata ingestion pipeline found - skipping trigger")
+        
+        # Step 3: Add table descriptions
+        print("Updating table descriptions...")
+        for table_name, description in OPENMETADATA_CONFIG["table_descriptions"].items():
+            fqn = f"{CLICKHOUSE_SERVICE_NAME}.default.default.{table_name}"
+            table_resp = api_get(token, f"tables/name/{fqn}")
+            if table_resp.status_code == 200:
+                table_id = table_resp.json().get("id")
+                patch_data = [{"op": "add", "path": "/description", "value": description}]
+                patch_resp = api_patch(token, f"tables/{table_id}", patch_data)
+                if patch_resp.status_code in (200, 201):
+                    print(f"  Updated: {table_name}")
+                else:
+                    print(f"  Warning: Failed to update {table_name}: {patch_resp.status_code}")
+            else:
+                print(f"  Warning: Table not found: {table_name}")
+        
+        # Step 4: Create test suites and test cases
+        print("Creating data quality tests...")
+        for test_def in OPENMETADATA_CONFIG["test_cases"]:
+            table_name = test_def["table"]
+            fqn = f"{CLICKHOUSE_SERVICE_NAME}.default.default.{table_name}"
+            test_suite_fqn = f"{fqn}.testSuite"
+            
+            # Ensure test suite exists
+            suite_resp = api_get(token, f"dataQuality/testSuites/name/{test_suite_fqn}")
+            if suite_resp.status_code != 200:
+                # Create test suite
+                suite_data = {
+                    "name": f"{table_name}_quality_tests",
+                    "displayName": f"{table_name} Quality Tests",
+                    "description": f"Data quality tests for {table_name}",
+                    "executableEntityReference": fqn
+                }
+                create_suite_resp = api_post(token, "dataQuality/testSuites/executable", suite_data)
+                if create_suite_resp.status_code not in (200, 201, 409):
+                    print(f"  Warning: Failed to create test suite for {table_name}")
+                    continue
+            
+            # Create test case
+            test_case_data = {
+                "name": test_def["name"],
+                "displayName": test_def["display_name"],
+                "description": test_def["description"],
+                "testDefinition": test_def["test_type"],
+                "entityLink": f"<#E::table::{fqn}::columns::{test_def['column']}>",
+                "testSuite": test_suite_fqn,
+                "parameterValues": test_def.get("parameters", [])
+            }
+            
+            create_test_resp = api_post(token, "dataQuality/testCases", test_case_data)
+            if create_test_resp.status_code in (200, 201):
+                print(f"  Created test: {test_def['display_name']}")
+            elif create_test_resp.status_code == 409:
+                print(f"  Test exists: {test_def['display_name']}")
+            else:
+                print(f"  Warning: Failed to create test {test_def['name']}: {create_test_resp.status_code}")
+        
+        # Step 5: Trigger test suite execution (optional - may fail if pipelines don't exist)
+        print("Triggering test suite execution...")
+        for table_name in set(t["table"] for t in OPENMETADATA_CONFIG["test_cases"]):
+            pipeline_name = f"{CLICKHOUSE_SERVICE_NAME}.{table_name}_test_pipeline"
+            
+            # Check if test pipeline exists, create if not
+            test_pipeline_resp = api_get(token, f"services/ingestionPipelines/name/{pipeline_name}")
+            if test_pipeline_resp.status_code != 200:
+                # Get service ID
+                service_resp = api_get(token, f"services/databaseServices/name/{CLICKHOUSE_SERVICE_NAME}")
+                if service_resp.status_code == 200:
+                    service_id = service_resp.json().get("id")
+                    fqn = f"{CLICKHOUSE_SERVICE_NAME}.default.default.{table_name}"
+                    
+                    pipeline_data = {
+                        "name": f"{table_name}_test_pipeline",
+                        "displayName": f"{table_name} Test Pipeline",
+                        "pipelineType": "TestSuite",
+                        "service": {"id": service_id, "type": "databaseService"},
+                        "sourceConfig": {
+                            "config": {
+                                "type": "TestSuite",
+                                "entityFullyQualifiedName": fqn
+                            }
+                        },
+                        "airflowConfig": {"scheduleInterval": "0 0 * * *"}
+                    }
+                    create_pipeline_resp = api_post(token, "services/ingestionPipelines", pipeline_data)
+                    if create_pipeline_resp.status_code in (200, 201):
+                        pipeline_id = create_pipeline_resp.json().get("id")
+                        # Deploy and trigger
+                        api_post(token, f"services/ingestionPipelines/deploy/{pipeline_id}", {})
+                        time.sleep(2)
+                        api_post(token, f"services/ingestionPipelines/trigger/{pipeline_id}", {})
+                        print(f"  Created and triggered: {table_name} test pipeline")
+                    elif create_pipeline_resp.status_code == 409:
+                        print(f"  Test pipeline exists: {table_name}")
+            else:
+                # Trigger existing pipeline
+                pipeline_id = test_pipeline_resp.json().get("id")
+                api_post(token, f"services/ingestionPipelines/trigger/{pipeline_id}", {})
+                print(f"  Triggered: {table_name} test pipeline")
+        
+        print("=" * 60)
+        print("OpenMetadata sync complete!")
+        print("=" * 60)
+        
+    except requests.exceptions.ConnectionError:
+        print("Warning: OpenMetadata server not reachable - skipping sync")
+    except Exception as e:
+        print(f"Warning: OpenMetadata sync failed: {e}")
+        # Don't fail the DAG - OM sync is optional
+
 
 with DAG(
     dag_id="continuous_ingestion_pipeline",
@@ -528,6 +786,12 @@ with DAG(
         env=DBT_ENV,
     )
 
+    # OpenMetadata sync task - runs after dbt to update metadata catalog
+    task_sync_openmetadata = PythonOperator(
+        task_id="sync_openmetadata",
+        python_callable=sync_openmetadata,
+    )
+
     # Define dependencies: each stream is independent, dbt runs after ingestion
     task_setup_iot >> task_fetch_iot
     task_setup_weather >> task_fetch_weather
@@ -536,5 +800,5 @@ with DAG(
     task_setup_iceberg >> task_write_elering_iceberg >> task_create_iceberg_view
     
     [task_fetch_iot, task_fetch_weather, task_create_static_tables, task_create_iceberg_view] >> task_dbt_debug
-    task_dbt_debug >> task_dbt_deps >> task_dbt_seed >> task_dbt_run >> task_dbt_test
+    task_dbt_debug >> task_dbt_deps >> task_dbt_seed >> task_dbt_run >> task_dbt_test >> task_sync_openmetadata
     

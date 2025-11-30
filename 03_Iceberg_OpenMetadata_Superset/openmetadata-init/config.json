@@ -1,0 +1,49 @@
+{
+  "service": {
+    "name": "clickhouse_gold",
+    "host": "clickhouse-server:8123",
+    "username": "airflow",
+    "database": "default"
+  },
+  "table_descriptions": {
+    "dim_device": "Device dimension table containing IoT sensor information including device names, types, and manufacturers for the ASHP monitoring system.",
+    "dim_location": "Location dimension table containing geographic information for sensor locations including city, country, climate zone, and coordinates.",
+    "dim_time": "Time dimension table with hourly granularity containing date attributes, day of week, holidays, and time-based analytics support.",
+    "fact_heating_energy_usage": "Central fact table containing hourly ASHP performance metrics including power consumption, temperatures, electricity prices, weather data, and calculated COP values.",
+    "bronze_iot_raw_data": "Raw IoT sensor data from Home Assistant including power, temperature, and humidity readings.",
+    "bronze_weather_history": "Raw weather data including temperature, humidity, wind, pressure, and UV index.",
+    "bronze_elering_iceberg_readonly": "Read-only view over Iceberg table containing Estonian electricity spot prices from Elering API.",
+    "v_heating_energy_full_access": "Full access view of heating energy data for analyst_full role.",
+    "v_heating_energy_limited_access": "Pseudonymized view of heating energy data for analyst_limited role with bucketed values and hashed fields."
+  },
+  "test_cases": [
+    {
+      "table": "fact_heating_energy_usage",
+      "column": "TimeKey",
+      "test_type": "columnValuesToBeNotNull",
+      "name": "timekey_not_null",
+      "display_name": "TimeKey Not Null",
+      "description": "Ensures TimeKey is never null (required for time dimension join)"
+    },
+    {
+      "table": "dim_device",
+      "column": "DeviceKey",
+      "test_type": "columnValuesToBeUnique",
+      "name": "devicekey_unique",
+      "display_name": "DeviceKey Unique",
+      "description": "Ensures DeviceKey is unique in the device dimension table"
+    },
+    {
+      "table": "fact_heating_energy_usage",
+      "column": "ASHP_Power",
+      "test_type": "columnValuesToBeBetween",
+      "name": "ashp_power_range",
+      "display_name": "ASHP Power Valid Range",
+      "description": "Ensures ASHP_Power values are within realistic range (0 to 10000 watts)",
+      "parameters": {
+        "minValue": "0",
+        "maxValue": "10000"
+      }
+    }
+  ]
+}

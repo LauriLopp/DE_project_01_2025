@@ -4,13 +4,7 @@
 	)
 }}
 
--- Staging: clean weather data
--- Goals:
--- 1) English column names
--- 2) Convert UTC timestamp to local time (Europe/Tallinn) and expose a DateTime column named `timestamp`
--- 3) Cast numeric fields to floats and turn missing values into NULLs
--- 4) Aggregate to hourly grain to match other data!!
--- 5) Add surrogate key
+-- Converts to local time, aggregates to hourly, converts units (hPa->mmHg, km/h->m/s)
 
 WITH raw AS (
 	SELECT

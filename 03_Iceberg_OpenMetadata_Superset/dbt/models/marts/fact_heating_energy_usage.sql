@@ -1,12 +1,6 @@
 {{ config(materialized='table') }}
 
--- ============================================================================
--- FACT_HEATING_ENERGY_USAGE
--- ---------------------------------------------------------------------------
--- Gold-layer fact table combining IoT sensor data, pricing, weather,
--- device and location dimensions.
--- Works fully in ClickHouse and uses CROSS JOIN + WHERE for range logic.
--- ============================================================================
+-- Fact: IoT data + pricing + weather + device/location dims (CROSS JOIN + validity filter)
 
 WITH base AS (
     SELECT
