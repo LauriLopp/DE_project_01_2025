@@ -46,7 +46,75 @@ The file can be found from [Google Drive](https://drive.google.com/file/d/1_C8yH
 
 ## 📁 Project Structure
 
-*Placeholder: Directory and file layout for this part of the project.*
+```
+03_Iceberg_OpenMetadata_Superset/
+├── .env.local                          # (User-provided) Contains secret tokens and credentials
+├── clickhouse-init/                    # Scripts to initialize ClickHouse on first run
+│   ├── 01_roles.sql                    # Role definitions for ClickHouse access control
+│   ├── 02_users.sql                    # User creation scripts with role assignments
+│   └── 04_grants.sql                   # Grant statements for database permissions
+├── cloudbeaver-init/                   # Pre-configured connection settings for CloudBeaver UI
+│   ├── .dbeaver/
+│   │   └── data-sources.json           # CloudBeaver data source configuration
+│   └── initial-data-sources.json       # Initial connection settings template
+├── config/                             # ClickHouse user and profile configurations
+│   └── users.d/
+│       ├── default-user.xml            # Default user configuration
+│       └── temp_admin.xml              # Temporary admin user configuration
+├── dags/
+│   ├── backfill_historical_data.py     # DAG for backfilling historical Iceberg data
+│   └── home_assistant_continuous_raw.py # Main Airflow DAG with OpenMetadata sync
+├── data/                               # Mounted volume for data exchange
+├── dbt/
+│   ├── dbt_packages/                   # (Generated) Installed dbt packages
+│   ├── macros/
+│   │   └── expression_is_true_clickhouse.sql # Custom generic test for ClickHouse
+│   ├── models/
+│   │   ├── marts/                      # Gold layer: Dimensional and fact models
+│   │   │   ├── dim_device.sql
+│   │   │   ├── dim_location.sql
+│   │   │   ├── dim_time.sql
+│   │   │   ├── fact_heating_energy_usage.sql
+│   │   │   └── schema.yml              # Tests and descriptions for mart layer
+│   │   ├── staging/                    # Silver layer: Cleaned and standardized views
+│   │   │   ├── stg_device.sql
+│   │   │   ├── stg_iot_data.sql
+│   │   │   ├── stg_location.sql
+│   │   │   ├── stg_price_data.sql
+│   │   │   └── stg_weather_data.sql
+│   │   ├── views/                      # Access-controlled views for role-based access
+│   │   │   ├── schema.yml              # Tests and descriptions for views
+│   │   │   ├── v_heating_energy_full_access.sql
+│   │   │   └── v_heating_energy_limited_access.sql
+│   │   └── sources.yml                 # Defines Bronze layer sources for dbt
+│   ├── seeds/
+│   │   └── estonian_holidays.csv       # Seed data for public holidays
+│   ├── .user.yml                       # (Generated) dbt user configuration
+│   ├── dbt_project.yml                 # Main dbt project configuration file
+│   ├── package-lock.yml                # Lockfile for dbt package versions
+│   ├── packages.yml                    # External dbt package dependencies
+│   ├── profiles.yml                    # Database connection profiles for dbt
+│   └── selectors.yml                   # Definitions for selecting subsets of models
+├── device_location_data/               # Static CSVs mounted into ClickHouse for seeding
+│   ├── device_data.csv
+│   └── location_data.csv
+├── logs/                               # (Generated) Airflow task logs
+├── openmetadata-init/                  # Automated OpenMetadata bootstrapping scripts
+│   ├── bootstrap_openmetadata.py       # Creates ClickHouse service & ingestion pipeline
+│   └── config.json                     # OpenMetadata service configuration template
+├── superset/                           # Apache Superset configuration and assets
+│   ├── dashboards/
+│   │   └── superset_assets.zip         # Exported dashboard and chart definitions
+│   ├── uploads/                        # Uploaded files for Superset
+│   ├── fix_import_zip.py               # Script to fix dashboard import ZIP structure
+│   └── superset_config.py              # Superset configuration (auto-import, ClickHouse)
+├── docker-compose.yml                  # Defines all services (Airflow, dbt, ClickHouse, Superset, OpenMetadata, Iceberg, MinIO)
+├── Dockerfile                          # Docker build for standalone dbt service
+├── Dockerfile.airflow                  # Docker build for Airflow services
+├── Dockerfile.superset                 # Docker build for Superset with ClickHouse driver
+├── README.md                           # Main documentation for Part 3
+└── Star_schema_02.png                  # Star schema diagram
+```
 
 ---
 
