@@ -95,33 +95,109 @@ def setup_bronze_weather_table():
 
 # --- ICEBERG SETUP AND WRITE TASKS ---
 
-def setup_iceberg_catalog():
-    """Ensure MinIO warehouse path exists."""
-    import s3fs
+# PyIceberg REST Catalog configuration - uses the iceberg-rest service
+ICEBERG_CATALOG_CONFIG = {
+    "uri": "http://iceberg-rest:8181",
+    "s3.endpoint": MINIO_ENDPOINT,
+    "s3.access-key-id": MINIO_ACCESS_KEY,
+    "s3.secret-access-key": MINIO_SECRET_KEY,
+    "warehouse": ICEBERG_WAREHOUSE,
+}
+
+
+def ensure_minio_bucket():
+    """Create MinIO warehouse bucket if it doesn't exist.
     
-    # Just ensure the warehouse path exists in MinIO
-    fs = s3fs.S3FileSystem(
+    This is a self-healing fallback in case the createbuckets init container
+    failed or the bucket was deleted after a volume reset.
+    """
+    import boto3
+    from botocore.exceptions import ClientError
+    
+    s3 = boto3.client(
+        's3',
         endpoint_url=MINIO_ENDPOINT,
-        key=MINIO_ACCESS_KEY,
-        secret=MINIO_SECRET_KEY,
+        aws_access_key_id=MINIO_ACCESS_KEY,
+        aws_secret_access_key=MINIO_SECRET_KEY,
     )
     
-    # Create the bronze namespace directory
-    warehouse_path = f"warehouse/{ICEBERG_NAMESPACE}/{ICEBERG_TABLE_NAME}"
+    bucket_name = 'warehouse'
     try:
-        fs.makedirs(warehouse_path, exist_ok=True)
-        print(f"Created/verified Iceberg warehouse path: {warehouse_path}")
-    except Exception as e:
-        print(f"Warehouse path setup: {e}")
+        s3.head_bucket(Bucket=bucket_name)
+        print(f"MinIO bucket '{bucket_name}' exists.")
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', '')
+        if error_code in ('404', 'NoSuchBucket'):
+            print(f"MinIO bucket '{bucket_name}' not found, creating...")
+            s3.create_bucket(Bucket=bucket_name)
+            print(f"Created MinIO bucket '{bucket_name}'.")
+        else:
+            raise
+
+
+def setup_iceberg_catalog():
+    """Initialize Iceberg catalog and create namespace/table if needed."""
+    from pyiceberg.catalog import load_catalog
+    from pyiceberg.schema import Schema
+    from pyiceberg.types import TimestampType, StringType, DoubleType, NestedField
+    from pyiceberg.partitioning import PartitionSpec, PartitionField
+    from pyiceberg.transforms import DayTransform
     
-    print("Iceberg catalog setup complete. Table will be created on first write.")
+    # Ensure MinIO bucket exists before any Iceberg operations
+    ensure_minio_bucket()
+    
+    print("Connecting to Iceberg REST catalog...")
+    catalog = load_catalog("rest", **ICEBERG_CATALOG_CONFIG)
+    
+    # Create namespace if not exists
+    namespaces = [ns[0] for ns in catalog.list_namespaces()]
+    if ICEBERG_NAMESPACE not in namespaces:
+        catalog.create_namespace(ICEBERG_NAMESPACE)
+        print(f"Created namespace: {ICEBERG_NAMESPACE}")
+    else:
+        print(f"Namespace already exists: {ICEBERG_NAMESPACE}")
+    
+    # Define Iceberg schema for Elering price data
+    table_identifier = f"{ICEBERG_NAMESPACE}.{ICEBERG_TABLE_NAME}"
+    
+    try:
+        table = catalog.load_table(table_identifier)
+        print(f"Table already exists: {table_identifier}")
+    except Exception:
+        # Create new table with proper Iceberg schema
+        schema = Schema(
+            NestedField(1, "ingestion_ts", TimestampType(), required=False),
+            NestedField(2, "ts_utc", TimestampType(), required=False),
+            NestedField(3, "zone", StringType(), required=False),
+            NestedField(4, "currency", StringType(), required=False),
+            NestedField(5, "price_per_mwh", DoubleType(), required=False),
+        )
+        
+        # Partition by day on ts_utc
+        partition_spec = PartitionSpec(
+            PartitionField(source_id=2, field_id=1000, transform=DayTransform(), name="ts_day")
+        )
+        
+        table = catalog.create_table(
+            identifier=table_identifier,
+            schema=schema,
+            partition_spec=partition_spec,
+            location=f"{ICEBERG_WAREHOUSE}/{ICEBERG_NAMESPACE}/{ICEBERG_TABLE_NAME}",
+        )
+        print(f"Created Iceberg table: {table_identifier}")
+    
+    print("Iceberg catalog setup complete.")
 
 
 def write_elering_to_iceberg(**context):
-    """Fetch Elering prices and write to MinIO as Parquet."""
-    import s3fs
-    import uuid
-
+    """Fetch Elering prices and write to Iceberg table using PyIceberg REST catalog.
+    
+    IDEMPOTENT: Uses delete + append pattern to avoid duplicates on re-runs.
+    Deletes rows matching the time interval before appending new data.
+    """
+    from pyiceberg.catalog import load_catalog
+    from pyiceberg.expressions import GreaterThanOrEqual, LessThan, And
+    
     start_dt = context["data_interval_start"]
     end_dt = context["data_interval_end"]
     print(f"--- Iceberg Write (Elering): Processing data from {start_dt.isoformat()} to {end_dt.isoformat()} ---")
@@ -166,34 +242,42 @@ def write_elering_to_iceberg(**context):
         "price_per_mwh": pa.array(price_list, type=pa.float64()),
     })
 
-    # Write directly to MinIO as Parquet (Iceberg-compatible format)
-    fs = s3fs.S3FileSystem(
-        endpoint_url=MINIO_ENDPOINT,
-        key=MINIO_ACCESS_KEY,
-        secret=MINIO_SECRET_KEY,
-    )
+    # Connect to Iceberg catalog and write data
+    catalog = load_catalog("rest", **ICEBERG_CATALOG_CONFIG)
+    table_identifier = f"{ICEBERG_NAMESPACE}.{ICEBERG_TABLE_NAME}"
     
-    # Partition by ts_utc date (price date, not ingestion date)
-    partition_date = ts_utc_list[0].strftime("%Y-%m-%d") if ts_utc_list else ingestion_ts.strftime("%Y-%m-%d")
-    file_id = uuid.uuid4().hex[:8]
-    parquet_path = f"warehouse/{ICEBERG_NAMESPACE}/{ICEBERG_TABLE_NAME}/data/price_date={partition_date}/{file_id}.parquet"
+    table = catalog.load_table(table_identifier)
     
-    # Write parquet file
-    import pyarrow.parquet as pq
-    with fs.open(parquet_path, 'wb') as f:
-        pq.write_table(arrow_table, f)
+    # IDEMPOTENCY: Delete existing rows for this time interval before appending
+    # Convert to naive UTC datetime for Iceberg filter (PyIceberg uses microseconds)
+    start_ts = start_dt.replace(tzinfo=None) if start_dt.tzinfo else start_dt
+    end_ts = end_dt.replace(tzinfo=None) if end_dt.tzinfo else end_dt
     
-    print(f"Wrote {len(ingestion_ts_list)} Elering price records to s3://{parquet_path}")
+    try:
+        # Use Iceberg's delete API to remove rows in this time range
+        delete_filter = And(
+            GreaterThanOrEqual("ts_utc", start_ts),
+            LessThan("ts_utc", end_ts)
+        )
+        table.delete(delete_filter)
+        print(f"Deleted existing Iceberg data for interval {start_ts} to {end_ts}")
+    except Exception as e:
+        # Delete may fail on empty table or if no matching rows - that's OK
+        print(f"Delete step skipped (table may be empty or no matching rows): {e}")
+    
+    table.append(arrow_table)
+    
+    print(f"Wrote {len(ingestion_ts_list)} Elering price records to Iceberg table: {table_identifier}")
 
 
 def create_clickhouse_iceberg_view(**context):
-    """Create ClickHouse view to query Elering data from MinIO."""
+    """Create ClickHouse view to query Elering data from Iceberg table in MinIO."""
     ch_hook = ClickHouseHook(clickhouse_conn_id="clickhouse_default")
     ch_conn = ch_hook.get_conn()
     
-    # Create view using s3() table function to read Parquet files from MinIO
-    # Uses glob pattern to read all partitioned parquet files
-    create_view_sql = """
+    # Use ClickHouse's native iceberg() table function to read from Iceberg metadata
+    # This reads the proper Iceberg table format with snapshots and manifests
+    create_view_sql = f"""
         CREATE OR REPLACE VIEW default.bronze_elering_iceberg_readonly AS
         SELECT 
             ingestion_ts,
@@ -201,13 +285,38 @@ def create_clickhouse_iceberg_view(**context):
             zone,
             currency,
             price_per_mwh
-        FROM s3(
-            'http://minio:9000/warehouse/bronze/elering_price_iceberg/data/**/*.parquet',
+        FROM iceberg(
+            'http://minio:9000/warehouse/{ICEBERG_NAMESPACE}/{ICEBERG_TABLE_NAME}/',
             'minioadmin',
-            'minioadmin',
-            'Parquet'
+            'minioadmin'
         )
     """
+    
+    try:
+        ch_conn.execute(create_view_sql)
+        print("Created/updated ClickHouse view using iceberg() function: bronze_elering_iceberg_readonly")
+    except Exception as e:
+        # Fallback to s3() if iceberg() function fails (e.g., metadata not compatible)
+        print(f"iceberg() function failed: {e}")
+        print("Falling back to s3() glob pattern...")
+        
+        fallback_sql = f"""
+            CREATE OR REPLACE VIEW default.bronze_elering_iceberg_readonly AS
+            SELECT 
+                ingestion_ts,
+                ts_utc,
+                zone,
+                currency,
+                price_per_mwh
+            FROM s3(
+                'http://minio:9000/warehouse/{ICEBERG_NAMESPACE}/{ICEBERG_TABLE_NAME}/data/*.parquet',
+                'minioadmin',
+                'minioadmin',
+                'Parquet'
+            )
+        """
+        ch_conn.execute(fallback_sql)
+        print("Created/updated ClickHouse view using s3() fallback: bronze_elering_iceberg_readonly")
     
     ch_conn.execute(create_view_sql)
     print("Created/updated ClickHouse view: bronze_elering_iceberg_readonly")
@@ -224,7 +333,10 @@ def create_clickhouse_iceberg_view(**context):
 # --- DATA FETCHING TASKS ---
 
 def fetch_iot_history(**context):
-    """Fetches history for IoT SENSORS and loads into bronze_iot_raw_data."""
+    """Fetches history for IoT SENSORS and loads into bronze_iot_raw_data.
+    
+    IDEMPOTENT: Deletes existing data for the time interval before inserting.
+    """
     start_dt = context["data_interval_start"]
     end_dt = context["data_interval_end"]
     print(f"--- IoT Ingestion: Fetching data from {start_dt.isoformat()} to {end_dt.isoformat()} ---")
@@ -249,13 +361,22 @@ def fetch_iot_history(**context):
             rows.append((ingestion_ts, s.get("entity_id"), s.get("state"), dt, json.dumps(s.get("attributes", {}))))
 
     if rows:
+        # IDEMPOTENCY: Delete existing data for this time interval before inserting
+        start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+        end_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+        ch_conn.execute(f"ALTER TABLE bronze_iot_raw_data DELETE WHERE last_changed >= '{start_str}' AND last_changed < '{end_str}'")
+        print(f"Deleted existing IoT data for interval {start_str} to {end_str}")
+        
         ch_conn.execute("INSERT INTO bronze_iot_raw_data VALUES", rows)
         print(f"Inserted {len(rows)} IoT records.")
 
 # NOTE: fetch_elering_history removed - Elering data now written directly to Iceberg via write_elering_to_iceberg
 
 def fetch_weather_history(**context):
-    """Fetches history for the WEATHER entity and loads into bronze_weather_history."""
+    """Fetches history for the WEATHER entity and loads into bronze_weather_history.
+    
+    IDEMPOTENT: Deletes existing data for the time interval before inserting.
+    """
     start_dt = context["data_interval_start"]
     end_dt = context["data_interval_end"]
     print(f"--- Weather Ingestion: Fetching data from {start_dt.isoformat()} to {end_dt.isoformat()} ---")
@@ -294,6 +415,12 @@ def fetch_weather_history(**context):
             ))
 
     if rows:
+        # IDEMPOTENCY: Delete existing data for this time interval before inserting
+        start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+        end_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+        ch_conn.execute(f"ALTER TABLE bronze_weather_history DELETE WHERE last_changed >= '{start_str}' AND last_changed < '{end_str}'")
+        print(f"Deleted existing weather data for interval {start_str} to {end_str}")
+        
         ch_conn.execute("INSERT INTO bronze_weather_history VALUES", rows)
         print(f"Inserted {len(rows)} weather records.")
 
@@ -302,11 +429,17 @@ def fetch_weather_history(**context):
 def create_device_and_location_tables():
     """
     Create and load static bronze_device and bronze_location tables from CSVs.
+    
+    IDEMPOTENT: Uses DROP + CREATE pattern to ensure CSV changes are reflected.
     """
     ch = ClickHouseHook(clickhouse_conn_id="clickhouse_default").get_conn()
 
+    # Drop and recreate to pick up any CSV changes
+    ch.execute("DROP TABLE IF EXISTS bronze_device")
+    ch.execute("DROP TABLE IF EXISTS bronze_location")
+
     sql_device = """
-    CREATE TABLE IF NOT EXISTS bronze_device
+    CREATE TABLE bronze_device
     ENGINE = MergeTree()
     ORDER BY tuple()
     AS
@@ -315,7 +448,7 @@ def create_device_and_location_tables():
     """
 
     sql_location = """
-    CREATE TABLE IF NOT EXISTS bronze_location
+    CREATE TABLE bronze_location
     ENGINE = MergeTree()
     ORDER BY tuple()
     AS
@@ -326,7 +459,7 @@ def create_device_and_location_tables():
     ch.execute(sql_device)
     ch.execute(sql_location)
 
-    print("Loaded bronze_device and bronze_location from CSVs into schema.")
+    print("Loaded bronze_device and bronze_location from CSVs into schema (tables recreated).")
 
 with DAG(
     dag_id="continuous_ingestion_pipeline",

@@ -6,6 +6,12 @@ volumes:
   cloudbeaver-data:
   minio-data:
   superset-dbdata:
+  # OpenMetadata volumes
+  openmetadata-mysql-data:
+  openmetadata-es-data:
+  openmetadata-ingestion-volume-dag-airflow:
+  openmetadata-ingestion-volume-dags:
+  openmetadata-ingestion-volume-tmp:
 
 
 services:
@@ -42,6 +48,28 @@ services:
     entrypoint: >
       /bin/sh -c " /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin; /usr/bin/mc mb --ignore-existing myminio/warehouse; /usr/bin/mc anonymous set public myminio/warehouse; exit 0; "
     restart: "no"
+
+  #  Apache Iceberg REST Catalog
+  
+  iceberg-rest:
+    image: tabulario/iceberg-rest:1.6.0
+    container_name: de_project3_iceberg_rest
+    ports:
+      - "8181:8181"
+    environment:
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_REGION=us-east-1
+      - CATALOG_WAREHOUSE=s3://warehouse/
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - CATALOG_S3_ENDPOINT=http://minio:9000
+      - CATALOG_S3_PATH__STYLE__ACCESS=true
+    depends_on:
+      minio:
+        condition: service_healthy
+      createbuckets:
+        condition: service_completed_successfully
+    restart: always
 
   #  Airflow metadata database (Postgres)
 
@@ -277,6 +305,7 @@ services:
     depends_on:
       - superset-db
       - superset-redis
+      - clickhouse-server
     environment:
       SUPERSET_SECRET_KEY: "supersecretkey"
       SUPERSET_CONFIG_PATH: "/app/pythonpath/superset_config.py"
@@ -290,6 +319,223 @@ services:
         superset db upgrade &&
         superset fab create-admin --username admin --password admin --firstname Admin --lastname User --email admin@superset.local || true &&
         superset init &&
+        if [ -f /app/pythonpath/dashboards/superset_assets.zip ]; then
+          echo 'Cleaning Mac artifacts from superset_assets.zip...' &&
+          python /app/pythonpath/fix_import_zip.py &&
+          echo 'Importing dashboards from clean_assets directory...' &&
+          superset import-directory /app/pythonpath/dashboards/clean_assets -o -f || echo 'Dashboard import failed or already exists';
+        fi &&
         superset run -h 0.0.0.0 -p 8088
       "
     restart: always
+
+  # =============================================================================
+  # OpenMetadata Services
+  # =============================================================================
+
+  # OpenMetadata MySQL Database
+  openmetadata-mysql:
+    container_name: de_project3_openmetadata_mysql
+    image: docker.getcollate.io/openmetadata/db:1.6.1
+    command: "--sort_buffer_size=10M"
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+    expose:
+      - 3306
+    ports:
+      - "3307:3306"  # Use 3307 to avoid conflicts
+    volumes:
+      - openmetadata-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: mysql --user=root --password=$$MYSQL_ROOT_PASSWORD --silent --execute "use openmetadata_db"
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # OpenMetadata Elasticsearch
+  openmetadata-elasticsearch:
+    container_name: de_project3_openmetadata_elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.4
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1024m -Xmx1024m
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    healthcheck:
+      test: "curl -s http://localhost:9200/_cluster/health?pretty | grep status | grep -qE 'green|yellow' || exit 1"
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    volumes:
+      - openmetadata-es-data:/usr/share/elasticsearch/data
+
+  # OpenMetadata Database Migration (runs once)
+  openmetadata-migrate:
+    container_name: de_project3_openmetadata_migrate
+    image: docker.getcollate.io/openmetadata/server:1.6.1
+    command: "./bootstrap/openmetadata-ops.sh migrate"
+    environment:
+      OPENMETADATA_CLUSTER_NAME: openmetadata
+      SERVER_PORT: 8585
+      SERVER_ADMIN_PORT: 8586
+      LOG_LEVEL: INFO
+      MIGRATION_LIMIT_PARAM: 1200
+      # Authentication
+      AUTHORIZER_CLASS_NAME: org.openmetadata.service.security.DefaultAuthorizer
+      AUTHORIZER_REQUEST_FILTER: org.openmetadata.service.security.JwtFilter
+      AUTHORIZER_ADMIN_PRINCIPALS: "[admin]"
+      AUTHORIZER_ALLOWED_REGISTRATION_DOMAIN: '["all"]'
+      AUTHORIZER_INGESTION_PRINCIPALS: "[ingestion-bot]"
+      AUTHORIZER_PRINCIPAL_DOMAIN: "open-metadata.org"
+      AUTHORIZER_ENFORCE_PRINCIPAL_DOMAIN: "false"
+      AUTHORIZER_ENABLE_SECURE_SOCKET: "false"
+      AUTHENTICATION_PROVIDER: basic
+      AUTHENTICATION_PUBLIC_KEYS: "[http://localhost:8585/api/v1/system/config/jwks]"
+      AUTHENTICATION_AUTHORITY: "https://accounts.google.com"
+      AUTHENTICATION_ENABLE_SELF_SIGNUP: "true"
+      AUTHENTICATION_CLIENT_TYPE: public
+      # JWT
+      RSA_PUBLIC_KEY_FILE_PATH: "./conf/public_key.der"
+      RSA_PRIVATE_KEY_FILE_PATH: "./conf/private_key.der"
+      JWT_ISSUER: "open-metadata.org"
+      JWT_KEY_ID: "Gb389a-9f76-gdjs-a92j-0242bk94356"
+      # Pipeline Service
+      PIPELINE_SERVICE_CLIENT_ENDPOINT: "http://openmetadata-ingestion:8080"
+      SERVER_HOST_API_URL: "http://openmetadata-server:8585/api"
+      PIPELINE_SERVICE_CLIENT_VERIFY_SSL: "no-ssl"
+      # MySQL Database
+      DB_DRIVER_CLASS: com.mysql.cj.jdbc.Driver
+      DB_SCHEME: mysql
+      DB_PARAMS: "allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC"
+      DB_USER: openmetadata_user
+      DB_USER_PASSWORD: openmetadata_password
+      DB_HOST: openmetadata-mysql
+      DB_PORT: 3306
+      OM_DATABASE: openmetadata_db
+      # Elasticsearch
+      ELASTICSEARCH_HOST: openmetadata-elasticsearch
+      ELASTICSEARCH_PORT: 9200
+      ELASTICSEARCH_SCHEME: http
+      SEARCH_TYPE: elasticsearch
+      # Airflow
+      AIRFLOW_USERNAME: admin
+      AIRFLOW_PASSWORD: admin
+      FERNET_KEY: "jJ/9sz0g0OHxsfxOoSfdFdmk3ysNmPRnH3TUAbz3IHA="
+      # Secrets
+      SECRET_MANAGER: db
+      # Heap
+      OPENMETADATA_HEAP_OPTS: "-Xmx1G -Xms1G"
+    depends_on:
+      openmetadata-elasticsearch:
+        condition: service_healthy
+      openmetadata-mysql:
+        condition: service_healthy
+    restart: "no"
+
+  # OpenMetadata Server
+  openmetadata-server:
+    container_name: de_project3_openmetadata_server
+    restart: always
+    image: docker.getcollate.io/openmetadata/server:1.6.1
+    environment:
+      OPENMETADATA_CLUSTER_NAME: openmetadata
+      SERVER_PORT: 8585
+      SERVER_ADMIN_PORT: 8586
+      LOG_LEVEL: INFO
+      # Authentication
+      AUTHORIZER_CLASS_NAME: org.openmetadata.service.security.DefaultAuthorizer
+      AUTHORIZER_REQUEST_FILTER: org.openmetadata.service.security.JwtFilter
+      AUTHORIZER_ADMIN_PRINCIPALS: "[admin]"
+      AUTHORIZER_ALLOWED_REGISTRATION_DOMAIN: '["all"]'
+      AUTHORIZER_INGESTION_PRINCIPALS: "[ingestion-bot]"
+      AUTHORIZER_PRINCIPAL_DOMAIN: "open-metadata.org"
+      AUTHORIZER_ENFORCE_PRINCIPAL_DOMAIN: "false"
+      AUTHORIZER_ENABLE_SECURE_SOCKET: "false"
+      AUTHENTICATION_PROVIDER: basic
+      AUTHENTICATION_PUBLIC_KEYS: "[http://localhost:8585/api/v1/system/config/jwks]"
+      AUTHENTICATION_AUTHORITY: "https://accounts.google.com"
+      AUTHENTICATION_ENABLE_SELF_SIGNUP: "true"
+      AUTHENTICATION_CLIENT_TYPE: public
+      # JWT
+      RSA_PUBLIC_KEY_FILE_PATH: "./conf/public_key.der"
+      RSA_PRIVATE_KEY_FILE_PATH: "./conf/private_key.der"
+      JWT_ISSUER: "open-metadata.org"
+      JWT_KEY_ID: "Gb389a-9f76-gdjs-a92j-0242bk94356"
+      # Pipeline Service
+      PIPELINE_SERVICE_CLIENT_ENDPOINT: "http://openmetadata-ingestion:8080"
+      SERVER_HOST_API_URL: "http://openmetadata-server:8585/api"
+      PIPELINE_SERVICE_CLIENT_VERIFY_SSL: "no-ssl"
+      PIPELINE_SERVICE_CLIENT_CLASS_NAME: "org.openmetadata.service.clients.pipeline.airflow.AirflowRESTClient"
+      # MySQL Database
+      DB_DRIVER_CLASS: com.mysql.cj.jdbc.Driver
+      DB_SCHEME: mysql
+      DB_PARAMS: "allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC"
+      DB_USER: openmetadata_user
+      DB_USER_PASSWORD: openmetadata_password
+      DB_HOST: openmetadata-mysql
+      DB_PORT: 3306
+      OM_DATABASE: openmetadata_db
+      # Elasticsearch
+      ELASTICSEARCH_HOST: openmetadata-elasticsearch
+      ELASTICSEARCH_PORT: 9200
+      ELASTICSEARCH_SCHEME: http
+      SEARCH_TYPE: elasticsearch
+      # Airflow
+      AIRFLOW_USERNAME: admin
+      AIRFLOW_PASSWORD: admin
+      FERNET_KEY: "jJ/9sz0g0OHxsfxOoSfdFdmk3ysNmPRnH3TUAbz3IHA="
+      # Secrets
+      SECRET_MANAGER: db
+      # Heap
+      OPENMETADATA_HEAP_OPTS: "-Xmx1G -Xms1G"
+    expose:
+      - 8585
+      - 8586
+    ports:
+      - "8585:8585"
+      - "8586:8586"
+    depends_on:
+      openmetadata-elasticsearch:
+        condition: service_healthy
+      openmetadata-mysql:
+        condition: service_healthy
+      openmetadata-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8586/healthcheck"]
+
+  # OpenMetadata Ingestion (Airflow for OM pipelines)
+  openmetadata-ingestion:
+    container_name: de_project3_openmetadata_ingestion
+    image: docker.getcollate.io/openmetadata/ingestion:1.6.1
+    depends_on:
+      openmetadata-elasticsearch:
+        condition: service_started
+      openmetadata-mysql:
+        condition: service_healthy
+      openmetadata-server:
+        condition: service_started
+    environment:
+      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__OPENMETADATA_AIRFLOW_APIS__DAG_GENERATED_CONFIGS: "/opt/airflow/dag_generated_configs"
+      DB_HOST: openmetadata-mysql
+      DB_PORT: 3306
+      AIRFLOW_DB: airflow_db
+      DB_SCHEME: "mysql+mysqldb"
+      DB_USER: airflow_user
+      DB_PASSWORD: airflow_pass
+    entrypoint: /bin/bash
+    command:
+      - "/opt/airflow/ingestion_dependency.sh"
+    expose:
+      - 8080
+    ports:
+      - "8081:8080"  # Map to 8081 to avoid conflict with our main Airflow
+    volumes:
+      - openmetadata-ingestion-volume-dag-airflow:/opt/airflow/dag_generated_configs
+      - openmetadata-ingestion-volume-dags:/opt/airflow/dags
+      - openmetadata-ingestion-volume-tmp:/tmp
