@@ -56,10 +56,87 @@ The file can be found from [Google Drive](https://drive.google.com/file/d/1_C8yH
 
 ---
 
-## 🏦 Data Storage & Analytics with ClickHouse
+## 🏦 Roles and Query access in ClickHouse
 
-*Placeholder: Overview of data storage, querying, and analytics using ClickHouse.*
 
+### Roles are created here:
+[Roles_and_Users_creation](https://github.com/LauriLopp/DE_project_2025/tree/main/03_Iceberg_OpenMetadata_Superset/clickhouse-init)
+
+*Note: the access to views is granted in view definition config*
+
+### Access views definition can be found here:
+
+[Create_full_access_view](https://github.com/LauriLopp/DE_project_2025/blob/main/03_Iceberg_OpenMetadata_Superset/dbt/models/views/v_heating_energy_full_access.sql)
+
+[Create_limited_access_view](https://github.com/LauriLopp/DE_project_2025/blob/main/03_Iceberg_OpenMetadata_Superset/dbt/models/views/v_heating_energy_limited_access.sql)
+
+### For testing run these commands:
+1. Enter clickhouse-server container:
+
+`docker exec -it de_project2_clickhouse_server bash`
+
+2. Login for full user:
+`clickhouse-client --user=user_analyst_full --password=strong_password_full`
+
+3. Run example queries with full analyst user:
+
+```
+SELECT
+  v.FactKey,
+  v.ElectricityPrice,
+  v.WC_Temp,
+  v.ASHP_Power,
+  t.IsHoliday,
+  t.Month,
+  t.Day,
+  t.HourOfDay,
+  t.IsWeekend,
+  d.Brand,
+  d.Model,
+  l.DeviceLocation,
+  l.PricingRegion
+FROM default.v_heating_energy_full_access v
+JOIN default.dim_time t ON v.TimeKey = t.TimeKey
+JOIN default.dim_device d ON v.DeviceKey = d.DeviceKey
+JOIN default.dim_location l ON v.LocationKey = l.LocationKey
+order by v.TimeKey desc
+LIMIT 10;
+```
+![Expected result](working_full_query.png)
+
+```
+SELECT * from fact_heatin_energy_usage limit 10;
+```
+![Expected result](not_working_query.png)
+
+4. Run queries with limited analyst user
+```
+SELECT
+  v.FactKey,
+  v.ElectricityPrice,
+  v.WC_Temp,
+  v.ASHP_Power,
+  t.IsHoliday,
+  t.Month,
+  t.Day,
+  t.HourOfDay,
+  t.IsWeekend,
+  d.Brand,
+  d.Model,
+  l.DeviceLocation,
+  l.PricingRegion
+FROM default.v_heating_energy_limited_access v
+JOIN default.dim_time t ON v.TimeKey = t.TimeKey
+JOIN default.dim_device d ON v.DeviceKey = d.DeviceKey
+JOIN default.dim_location l ON v.LocationKey = l.LocationKey
+order by v.TimeKey desc
+LIMIT 10;
+```
+![Expected result](working_limited_query.png)
+```
+SELECT * from fact_heatin_energy_usage limit 10;
+```
+![Expected result](not_working_query.png)
 ---
 
 ## 📈 Visualization with Apache Superset
