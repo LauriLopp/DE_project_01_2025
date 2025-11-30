@@ -38,7 +38,7 @@ The file can be found from [Google Drive](https://drive.google.com/file/d/1_C8yH
 7. **Enable Main DAG**: turn on the `continuous_ingestion_pipeline` DAG and confirm the tasks progress to running state.
 8. **Enable Historical DAG**: turn on the `backfill_historical_data` DAG and confirm the tasks progress to running state.
 9  **Verify Metadata**: Open http://localhost:8585/ and log in with credentials: admin@open-metadata.org/admin   
-10. **Verify that data is in Minio (Object Storage)**: Open [localhost](http://localhost:9001/login) , log in with credentials minioadmin/minioadmin
+10. **Verify that data is in Minio (Object Storage)**: Open `http://localhost:9001/login` , log in with credentials minioadmin/minioadmin
 11. **Access Apache Superset UI**: open `http://localhost:8088`, login with credentials: admin/admin
 12. **Verify data**: Navigate to dashboard for data visualisations. See screenshots in Example Queries & Dashboards
 
