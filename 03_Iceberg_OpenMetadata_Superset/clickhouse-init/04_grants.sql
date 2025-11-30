@@ -1,5 +1,5 @@
 -- GRANTS FOR ANALYST ROLES
--- analyst_full: Full access to all gold tables and views
+-- analyst_full: Full access to gold table dims and full access view
 -- analyst_limited: Dims + pseudonymized view only (no direct fact table access)
 
 -- analyst_full: Full access
@@ -8,9 +8,6 @@
 GRANT SELECT ON default.dim_device TO analyst_full;
 GRANT SELECT ON default.dim_location TO analyst_full;
 GRANT SELECT ON default.dim_time TO analyst_full;
-
--- Fact table (full access)
-GRANT SELECT ON default.fact_heating_energy_usage TO analyst_full;
 
 -- Full access view
 GRANT SELECT ON default.v_heating_energy_full_access TO analyst_full;

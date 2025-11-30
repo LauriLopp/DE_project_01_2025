@@ -9,10 +9,9 @@
 
 /*
 Pseudonymized columns:
-WC_Temp - shown in 5 degree ranges
+ASHP-Power - shown in 100 W ranges
+WC_Temp - fully masked
 ElectricityPrice - shown in 50 cent ranges
-WeatherCondition - hash the actual condition,
-    so that different conditions are recognized but not identified
 */
 
 SELECT
@@ -24,11 +23,16 @@ SELECT
 	-- Floor to nearest 0.5, then construct string "0.0 – 0.5", "0.5 – 1.0", etc.
     concat(
         toString(floor(ElectricityPrice * 2) / 2),
-        ' – ',
+        '...',
         toString((floor(ElectricityPrice * 2) / 2) + 0.5)
     ) AS ElectricityPrice_Range,
 
-    ASHP_Power,
+    -- Floor to nearest 100, then construct string "100 – 200", "200 – 300", etc.
+    concat(
+        toString(floor(ASHP_Power / 100) * 100),
+        '...',
+        toString((floor(ASHP_Power / 100) * 100) + 100)
+    ) AS ASHP_Power_Range,
     Boiler_Power,
     Air_Drier_Power,
     Boiler_Voltage,
@@ -37,12 +41,8 @@ SELECT
     IndoorHumidityAbs,
     WC_HumidityAbs,
 
-	-- Floor to nearest 5, then construct string "20 – 25", "25 – 30", etc.
-    concat(
-        toString(floor(WC_Temp / 5) * 5),
-        ' – ',
-        toString((floor(WC_Temp / 5) * 5) + 5)
-    ) AS WC_Temp_Range,
+	-- Completely hide WC_temp.
+    'Masked' AS WC_Temp,
 
     OutdoorTemp,
     DewPoint,
@@ -53,8 +53,6 @@ SELECT
     WindDir,
     WindGustSpeed_ms,
     WindSpeed_ms,
-
-	-- Hide WeatherCondition using hashing
-    lower(hex(SHA256(concat(WeatherCondition, 'my_super_secret_salt_2025')))) AS WeatherCondition
+    WeatherCondition
 
 FROM {{ ref('fact_heating_energy_usage') }}
