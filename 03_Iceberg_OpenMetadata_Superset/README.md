@@ -26,7 +26,19 @@ All data is still automated via Apache Airflow and DBT.
 
 ## 🛠️ Setup & Installation
 
-*Placeholder: Steps to set up the environment, install dependencies, and configure services.*
+1. **Install [Tailscale](https://tailscale.com/)**: Sign in to Tailscale with the Google account or invite link provided by the team.
+2. **Obtain secrets**: Get the shared `.env.local` file from the team. Place it alongside `docker-compose.yml` inside `02_Airflow_ClickHouse_dbt/` before starting any containers.
+The file can be found from [Google Drive](https://drive.google.com/file/d/1_C8yHceYJq4tOPXwc69b1QlV-fdz3qt6/view?usp=sharing) and is directly available to course lectors. The peer graders and other interested parties must request access and **provide well explained reason** to obtain the access.
+3. **Clone or update the project**:
+  - Fresh setup: `git clone https://github.com/LauriLopp/DE_project_2025.git`
+  - Existing clone: `git pull` to fetch the latest changes.
+4. **Change directory**: `cd DE_project_2025/02_Airflow_ClickHouse_dbt`
+5. **Start the stack**: `docker compose up --build -d`
+6. **Access Airflow**: open `http://localhost:8080`, log in with username `airflow` and password `airflow`.
+7. **Enable the Main**: turn on the `continuous_ingestion_pipeline` DAG and confirm the tasks progress to running state.
+8. **Enable Historical data**: turn on the `backfill_historical_data` DAG and confirm the tasks progress to running state.
+8. **Access Apache Superset UI**: open `http://localhost:8088`, login with credentials: admin/admin
+10. **Verify data**: Navigate to dashboard for data visualisations. See screenshots in Example Queries & Dashboards
 
 ---
 
