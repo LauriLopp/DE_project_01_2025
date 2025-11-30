@@ -51,8 +51,8 @@ All data is still automated via Apache Airflow and DBT.
 ## 📈 Visualization with Apache Superset
 
 For data visualisation, we connected Clickhouse to Apache Superset in the usual manner.
-For visualising our API data, we created a single dashboard. See the screenchot below of the data:
-![Apache Superset Dashboard](dashboard_with_data.png)
+For visualising our API data, we created a single dashboard. 
+
 
 ---
 
@@ -63,8 +63,13 @@ For visualising our API data, we created a single dashboard. See the screenchot 
 ---
 
 ## 🖼️ Screenshots & Visuals
+Elering Price data in Minio
 
-*Placeholder: Add screenshots or diagrams of the architecture, dashboards, and key UI elements.*
+
+Bronze Elering Price in Clickhouse through Minio/Iceberg
+
+Apache Superset Dashboard
+![Apache Superset Dashboard](dashboard_with_data.png)
 
 ---
 
