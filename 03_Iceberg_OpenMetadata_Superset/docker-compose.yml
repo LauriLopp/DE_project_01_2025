@@ -271,3 +271,62 @@ services:
     environment:
       DBT_PROFILES_DIR: /dbt
     tty: true
+<<<<<<< Updated upstream
+=======
+
+  # -----------------------------
+  # Superset Dependencies
+  # -----------------------------
+
+  superset-redis:
+    image: redis:7
+    container_name: de_project3_superset_redis
+    restart: always
+
+  superset-db:
+    image: postgres:16
+    container_name: de_project3_superset_db
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: superset
+    volumes:
+      - superset-dbdata:/var/lib/postgresql/data
+    restart: always
+
+  # -----------------------------
+  # Superset Application
+  # -----------------------------
+
+  superset:
+    container_name: de_project3_superset
+    build:
+      context: .
+      dockerfile: Dockerfile.superset
+    depends_on:
+      - superset-db
+      - superset-redis
+    environment:
+      SUPERSET_SECRET_KEY: "supersecretkey"
+      SUPERSET_CONFIG_PATH: "/app/pythonpath/superset_config.py"
+      SUPERSET_SQLALCHEMY_DATABASE_URI: "postgresql://superset:superset@superset-db:5432/superset"
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./superset:/app/pythonpath
+      - ./superset_assets:/app/superset_assets
+    command: >
+      /bin/bash -c "
+      superset db upgrade &&
+      superset fab create-admin --username admin --password admin --firstname Admin --lastname User --email admin@superset.local || true &&
+      superset init &&
+      if [ -f /app/superset_assets/dashboard_export.zip ]; then
+        echo 'Importing dashboards from dashboard_export.zip' ;
+        superset import-dashboards --username admin --path /app/superset_assets/dashboard_export.zip || echo '⚠️ Dashboard import failed (check logs)' ;
+      else
+        echo 'No dashboard_export.zip found, skipping import.' ;
+      fi &&
+      superset run -h 0.0.0.0 -p 8088
+      "
+    restart: always
+>>>>>>> Stashed changes
