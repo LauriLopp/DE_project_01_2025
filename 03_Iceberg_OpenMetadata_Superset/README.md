@@ -12,7 +12,15 @@ This part of the project focuses on implementing data governance and visualizati
 
 ## 🚀 Project Overview
 
-*Placeholder: Brief description of the goals and scope for Part 3. Explain the role of each tool in the stack.*
+For Project 3 we added minio as the object storage for the data that is queried through API's. 
+Data pipeline in a simplified form:
+
+1. Elering Price API
+2. Minio with Iceberg to ensure rollbacks & consistent reads across snapshots
+3. Clickhouse as the main database
+4. Apache Superset to visualise data
+
+All data is still automated via Apache Airflow and DBT.
 
 ---
 
