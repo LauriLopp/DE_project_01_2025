@@ -52,7 +52,13 @@ The file can be found from [Google Drive](https://drive.google.com/file/d/1_C8yH
 
 ## 🗄️ Data Governance with Apache Iceberg & OpenMetadata
 
-*Placeholder: How data governance is managed, including metadata management, lineage, and cataloging.*
+### Example of added table and column descriptions for fact table 
+![OpenMetadata column descriptions](metadata_cols.png)
+### Integrated three tests for data quality:
+
+OpenMetaData tests
+<img width="2559" height="679" alt="image" src="https://github.com/user-attachments/assets/5d0b9cc1-bb4e-4286-8ab7-b1492333d58f" />
+
 
 ---
 
@@ -147,12 +153,6 @@ For visualising our API data, we created a single dashboard.
 
 ---
 
-## 🔗 Integration & Workflow
-
-*Placeholder: How the tools are integrated and how data flows through the system.*
-
----
-
 ## 🖼️ Screenshots & Visuals
 
 Elering Price data in Minio
@@ -163,10 +163,6 @@ Bronze Elering Price in Clickhouse through Minio/Iceberg
 
 Apache Superset Dashboard
 ![Apache Superset Dashboard](dashboard_with_data.png)
-
-OpenMetaData tests
-<img width="2559" height="679" alt="image" src="https://github.com/user-attachments/assets/5d0b9cc1-bb4e-4286-8ab7-b1492333d58f" />
-
 
 ---
 
@@ -196,11 +192,5 @@ Energy Use vs Temp Difference (Indoor – Outdoor).
 Answers Q1 and Q5 — demonstrates heating physics (Temp Delta → Power usage).
 
 ![Indoor vs Outdoor](energy-use-vs-temp-difference-indoor-outdoor.jpg)
-
----
-
-## 📚 References & Further Reading
-
-*Placeholder: Links to documentation, tutorials, and related resources.*
 
 ---
