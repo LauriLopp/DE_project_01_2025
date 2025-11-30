@@ -1,0 +1,107 @@
+table_name: Energy Cost vs Electricity Price Bucket
+main_dttm_col: null
+description: null
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: null
+schema: default
+sql: "SELECT\n  0.05 * FLOOR(ElectricityPrice / 0.05) AS price_bin_eur,\n  AVG(ElectricityPrice)\
+  \ AS avg_price_in_bin,\n  AVG(ASHP_Power) AS avg_power_w,\n  SUM(ASHP_Power)/1000.0\
+  \ AS energy_kwh,\n  SUM((ASHP_Power/1000.0) * ElectricityPrice) AS bucket_cost,\n\
+  \  COUNT(*) AS hours\nFROM fact_heating_energy_usage\nWHERE ElectricityPrice IS\
+  \ NOT NULL\n  AND ASHP_Power IS NOT NULL\nGROUP BY 0.05 * FLOOR(ElectricityPrice\
+  \ / 0.05)\nORDER BY price_bin_eur;\n"
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+uuid: d05b3cf1-3e2b-4ffa-8c2d-fbb3c30406dc
+metrics:
+- metric_name: count
+  verbose_name: COUNT(*)
+  metric_type: count
+  expression: COUNT(*)
+  description: null
+  d3format: null
+  currency: null
+  extra: null
+  warning_text: null
+columns:
+- column_name: avg_price_in_bin
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: Nullable(Float64)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: avg_power_w
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: Nullable(Float64)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: price_bin_eur
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: Nullable(Float64)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: bucket_cost
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: Nullable(Float64)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: energy_kwh
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: Nullable(Float64)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: hours
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: UInt64
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
+version: 1.0.0
+database_uuid: 0db363b5-cee5-402b-9a5a-7a4b5af23d12
